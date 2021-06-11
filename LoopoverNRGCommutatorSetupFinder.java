@@ -38,16 +38,16 @@ public class LoopoverNRGCommutatorSetupFinder {
         private int[] perm;
         private int[] par, root, cost;
         private String[] tcycs;
+        private int diam;
         int code(int[] vs) {
             int out=0;
-            int pow=1;
-            for (int i=0; i<K; i++, pow*=V)
+            for (int i=0, pow=1; i<K; i++, pow*=V)
                 out+=vs[i]*pow;
             return out;
         }
         int[] decode(int code) {
             int[] out=new int[K];
-            for (int i=0; i<out.length; i++, code/=V)
+            for (int i=0; i<K; i++, code/=V)
                 out[i]=code%V;
             return out;
         }
@@ -73,7 +73,7 @@ public class LoopoverNRGCommutatorSetupFinder {
             //the graph of reachable states of pieces + gripped piece is translation-symmetric
             //--> if all pieces, including the gripped piece, are translated by the same displacement,
             //  that does not affect the shortest setup move sequence to a valid commutator position
-            //--> WLOG gripped piece is always at (0,0)
+            //--> therefore we only need to care about the offset of each permuted piece relative to the gripped piece
             V=N*N;
             int AMT=1; for (int rep=0; rep<K; rep++) AMT*=V;
             par=new int[AMT];
@@ -117,6 +117,7 @@ public class LoopoverNRGCommutatorSetupFinder {
                 if (vertsAtCost[c]==null) vertsAtCost[c]=new AList(8);
                 else vertsAtCost[c].resize(vertsAtCost[c].sz+8);
                 for (int b=0; b<8; b++) {
+                    //add the 8 dihedral symmetries of the commutators
                     String tcyc=alg;
                     for (int t=0; t<3; t++)
                         if ((b&(1<<t))!=0)
@@ -136,50 +137,41 @@ public class LoopoverNRGCommutatorSetupFinder {
                     vertsAtCost[c].add(st);
                 }
             }
-            int diam=0;
+            diam=0;
             for (int co=0; co<vertsAtCost.length; co++) //optimized Dijkstra's
-                if (vertsAtCost[co]!=null) {
-                    diam=Math.max(diam,co);
-                    for (int fi=0; fi<vertsAtCost[co].sz; fi++) {
-                        int f=vertsAtCost[co].at(fi);
-                        int[] locs=decode(f);
-                        for (int d=0; d<4; d++) { //D, R, U, L
-                            int shift=d/2==0?-1:1; //imagine moving the gripped piece with this shift value, in direction d
-                            int[] nlocs=new int[locs.length];
-                            for (int i=0; i<locs.length; i++) {
-                                int r=locs[i]/N, c=locs[i]%N;
-                                if (d%2==0) {
-                                    if (c!=0) r=mod(r-shift,N);
-                                }
-                                else {
-                                    if (r!=0) c=mod(c-shift,N);
-                                }
-                                nlocs[i]=r*N+c;
+            if (vertsAtCost[co]!=null) {
+                diam=Math.max(diam,co);
+                for (int fi=0; fi<vertsAtCost[co].sz; fi++) {
+                    int f=vertsAtCost[co].at(fi);
+                    int[] locs=decode(f);
+                    for (int d=0; d<4; d++) { //D, R, U, L
+                        int shift=d/2==0?-1:1; //imagine moving the gripped piece in direction d
+                        //then relative to the gripped piece, all other pieces move in the opposite direction
+                        int[] nlocs=new int[locs.length];
+                        for (int i=0; i<locs.length; i++) {
+                            int r=locs[i]/N, c=locs[i]%N;
+                            if (d%2==0) {
+                                if (c!=0) r=mod(r-shift,N);
                             }
-                            int code=code(nlocs);
-                            if (cost[code]==-1) {
-                                par[code]=f*4+d;
-                                root[code]=root[f];
-                                cost[code]=co+2;
-                                if (vertsAtCost[cost[code]]==null) vertsAtCost[cost[code]]=new AList(1);
-                                vertsAtCost[cost[code]].add(code);
+                            else {
+                                if (r!=0) c=mod(c-shift,N);
                             }
+                            nlocs[i]=r*N+c;
+                        }
+                        int code=code(nlocs);
+                        if (cost[code]==-1) {
+                            par[code]=f*4+d;
+                            root[code]=root[f];
+                            cost[code]=co+2;
+                            if (vertsAtCost[cost[code]]==null) vertsAtCost[cost[code]]=new AList(1);
+                            vertsAtCost[cost[code]].add(code);
                         }
                     }
                 }
-            System.out.println("K="+perm.length+" diameter="+diam);
-            System.out.println("BFS tree time="+(System.currentTimeMillis()-sttime));
+            }
+            System.out.printf("K=%d,diameter=%d,BFS time=%d%n",K,diam,(System.currentTimeMillis()-sttime));
         }
-        //L[] is an array of LOCATIONS
-        private int mvcnt(int[] L, int lr, int lc) {
-            if (L.length!=K) throw new RuntimeException("Mismatch in number of pieces: "+L.length+"!="+K);
-            int[] nL=new int[K];
-            for (int i=0; i<K; i++) nL[i]=mod(L[i]/N-lr,N)*N+mod(L[i]%N-lc,N);
-            /*int v=code(nL);
-            System.out.println("root,alg="+root[v]+","+tcycs[-1-root[v]]);
-            return 2* cost[v]+tcycs[-1-root[v]].length();*/
-            return cost[code(nL)];
-        }
+        //L[] is an array of locations on the board
         private String[] actionsol(int[] L, int lr, int lc) {
             if (L.length!=K) throw new RuntimeException("Mismatch in number of pieces: "+L.length+"!="+K);
             StringBuilder out=new StringBuilder();
@@ -357,12 +349,31 @@ public class LoopoverNRGCommutatorSetupFinder {
                 att[i+1]++;
             }
         }
-        System.out.println("observed diameter="+diam);
+        if (diam!=bfs.diam)
+            System.out.println("!!!MISMATCH: verifier's observed diameter="+diam);
         System.out.println("verification time="+(System.currentTimeMillis()-st));
     }
     public static void main(String[] args) {
-        int N=5;
-        verify(N,cyc3bfs(N));
-        verify(N,swap22bfs(N));
+        int Nlo=4, Nhi=10;
+        int[] S3=new int[Nhi-Nlo+1], S4=new int[Nhi-Nlo+1];
+        for (int N=Nlo; N<=Nhi; N++) {
+            System.out.println("N="+N);
+            SetupFinder bfs3=cyc3bfs(N);
+            if (bfs3==null) S3[N-Nlo]=-1;
+            else {
+                //verify(N,bfs3);
+                S3[N-Nlo]=bfs3.diam;
+            }
+            SetupFinder bfs4=swap22bfs(N);
+            if (bfs4==null) S4[N-Nlo]=-1;
+            else {
+                //verify(N,bfs4);
+                S4[N-Nlo]=bfs4.diam;
+            }
+        }
+        String form="%3s%4s%4s%n";
+        System.out.printf(form,"N","S3","S4");
+        for (int N=Nlo; N<=Nhi; N++)
+            System.out.printf(form,N,S3[N-Nlo],S4[N-Nlo]);
     }
 }
