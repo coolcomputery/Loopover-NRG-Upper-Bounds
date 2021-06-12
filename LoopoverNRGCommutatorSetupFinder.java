@@ -1,4 +1,5 @@
 import java.util.*;
+import java.math.BigInteger;
 public class LoopoverNRGCommutatorSetupFinder {
     private static final char[] dirNames={'D','R','U','L'};
     private static int mod(int n, int k) {
@@ -390,12 +391,19 @@ public class LoopoverNRGCommutatorSetupFinder {
             for (int K=3; K<=N*N-1; K++) worst=Math.max(worst,Wrow[K]);
             worst+=2*(int)Math.floor(N/2);
             //System.out.println("N="+N+":"+Arrays.toString(Wrow));
-            System.out.printf(form2,N,(int)Math.ceil((logfactorial(N*N)-Math.log(2))/Math.log(4)),worst);
+            BigInteger target=BigInteger.ONE;
+            for (int i=2; i<=N*N; i++)
+                target=target.multiply(new BigInteger(""+i));
+            if (N%2==1) target=target.divide(new BigInteger("2"));
+            //1+4+4*3+...+4*3^(m-1)
+            // =1+4(1+3+...+3^(m-1))
+            // =1+4*(3^m-1)/2
+            // =1+2*(3^m-1)
+            // =2*3^m-1 >= (N^2)!/2 for integer m
+            int m=0;
+            for (; new BigInteger("2").multiply(new BigInteger("3").pow(m)).subtract(BigInteger.ONE)
+                    .compareTo(target)<0; m++);
+            System.out.printf(form2,N,m,worst);
         }
-    }
-    private static double logfactorial(int N) {
-        double out=0;
-        for (long i=2; i<=N; i++) out+=Math.log(i);
-        return out;
     }
 }
