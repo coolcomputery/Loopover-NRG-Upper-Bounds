@@ -394,7 +394,7 @@ public class LoopoverNRGCommutatorSetupFinder {
             BigInteger target=BigInteger.ONE;
             for (int i=2; i<=N*N; i++)
                 target=target.multiply(new BigInteger(""+i));
-            if (N%2==1) target=target.divide(new BigInteger("2"));
+            target=target.divide(new BigInteger("2"));
             //1+4+4*3+...+4*3^(m-1)
             // =1+4(1+3+...+3^(m-1))
             // =1+4*(3^m-1)/2
