@@ -14,6 +14,7 @@ public class LoopoverNRGLowerBound {
         BigInteger tot=BigInteger.ONE, target=BigInteger.ONE;
         for (int i=2; i<=N*N; i++)
             target=target.multiply(new BigInteger(""+i));
+        target=target.divide(new BigInteger("2"));
         for (int m=0;; m++) {
             BigInteger[] row=new BigInteger[m+1];
             dp.add(row);
