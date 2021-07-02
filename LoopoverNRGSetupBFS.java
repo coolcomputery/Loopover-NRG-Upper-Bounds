@@ -1,6 +1,6 @@
 import java.util.*;
 public class LoopoverNRGSetupBFS {
-    private static final char[] dirNames={'D','R','U','L'};
+    public static final char[] dirNames={'D','R','U','L'};
     private static int mod(int n, int k) {
         return (n%k+k)%k;
     }
@@ -20,7 +20,7 @@ public class LoopoverNRGSetupBFS {
         }
         return out;
     }
-    private static class Board {
+    public static class Board {
         int N;
         int[][] board;
         int lr, lc;
@@ -90,7 +90,7 @@ public class LoopoverNRGSetupBFS {
         }
         return out.toString();
     }
-    private static String comm(String A, String B) {
+    public static String comm(String A, String B) {
         return A+B+inv(A)+inv(B);
     }
     private static char transf(char mv, int type) {
@@ -105,6 +105,13 @@ public class LoopoverNRGSetupBFS {
         for (int i=0; i<mvs.length(); i++)
             out.append(transf(mvs.charAt(i),type));
         return out.toString();
+    }
+    public static String transformed(String alg, int b) {
+        String ret=alg;
+        for (int t=0; t<4; t++)
+            if((b&(1<<t))!=0)
+                ret=transf(ret,t);
+        return ret;
     }
     public static int[][] effect(int N, String alg) {
         //return {L,tP}
@@ -168,14 +175,10 @@ public class LoopoverNRGSetupBFS {
         this.tP=tP;
         {
             Set<String> tmp=new HashSet<>();
+            //include inverses and all dihedral symmatries of the initial algorithms
             for (String alg_init:algs_init)
-            for (int b=0; b<16; b++) {
-                String ret=alg_init;
-                for (int t=0; t<4; t++)
-                    if((b&(1<<t))!=0)
-                        ret=transf(ret,t);
-                tmp.add(ret);
-            }
+            for (int b=0; b<16; b++)
+                tmp.add(transformed(alg_init,b));
             this.algs=new String[tmp.size()];
             int i=0;
             for (String s:tmp) algs[i++]=s;
@@ -233,7 +236,7 @@ public class LoopoverNRGSetupBFS {
         diam=0;
         for (int co=0; co<tuplesAtCost.size(); co++) //Dijkstra's algorithm
         if (tuplesAtCost.get(co).size()>0) {
-            System.out.println(co+":"+tuplesAtCost.get(co).size());
+            //System.out.println(co+":"+tuplesAtCost.get(co).size());
             diam=Math.max(diam,co);
             for (int f:tuplesAtCost.get(co)) {
                 int[] locs=decode(f);
@@ -286,15 +289,29 @@ public class LoopoverNRGSetupBFS {
         for (int i=0; i<K; i++) nL[i]=mod(L[i]/N-lr,N)*N+mod(L[i]%N-lc,N);
         return cost[code(nL)];
     }
-
+    //a "blob" is a move sequence that leads to no net displacement in the gripped piece
     public static LoopoverNRGSetupBFS cyc3bfs(int N) {
         //3-cycle: pt 0 --> pt 1 --> pt 2 --> pt0
         List<String> algs=new ArrayList<>();
+        //below commutators found by brute-force search of all 3-cycles comm(A,B) for length-10 blobs A, B
         if (N==5)
-            algs.add(comm("RURULDRDLL","DDLDRULURU"));
+            algs.addAll(Arrays.asList(
+                    comm("RDRURDLULL","ULULDRURDD"),
+                    comm("UURDRULDLD","LLDLURDRUR"),
+                    comm("LLDLURDRUR","URURDLULDD"),
+                    comm("LLDRDLURUR","URULURDLDD")
+            ));
         else if (N>5)
-            algs.add(comm("LURDLULDRR","RRDRULDLUL"));
-        //both commutators above discovered by orucsoraihc#4626 on https://discord.com/channels/526598754791587850/532371042367438848/578774719302467595
+            algs.addAll(Arrays.asList(
+                    comm("LURDLULDRR","RRURDLULDL"),
+                    comm("RDRURDLULL","LDRULDLURR"),
+                    comm("LLURDRULDR","RURDRULDLL"),
+                    comm("LULDLURDRR","RRDLULDRUL"),
+                    comm("DDLDRULURU","UULDRDLURD"),
+                    comm("DDRULURDLU","UULURDLDRD"),
+                    comm("LULDLURDRR","RDLURDRULL"),
+                    comm("UURULDRDLD","DLURDLDRUU")
+            ));
         if (N%2==0) {
             StringBuilder rd=new StringBuilder(), lu=new StringBuilder();
             for (int r=0; r<N/2; r++) {
@@ -307,7 +324,7 @@ public class LoopoverNRGSetupBFS {
             alg.append(rd).append(lu);
             alg.append(alg);
             algs.add(alg.toString());
-            //don't know who discovered this other commutator
+            //don't know who discovered this algorithm
         }
         return algs.size()>0?
                 new LoopoverNRGSetupBFS(N,algs,new int[] {1,2,0}):
@@ -316,15 +333,218 @@ public class LoopoverNRGSetupBFS {
     public static LoopoverNRGSetupBFS swap22bfs(int N) {
         //double swapper: pt 0 <--> pt 1, pt 2 <--> pt 3
         if (N>=5) {
-            String a8="URULDRDL", b8="DLDRULUR";
-            return new LoopoverNRGSetupBFS(N,
-                            new String[] {
-                                    comm(a8,b8), //discovered by orucsoraihc#4626
-                                    comm(a8,inv(b8)), //discovered by me
-                                    comm(inv(a8),inv(b8)) //discovered by me
-                            },
-                            new int[] {1,0,3,2}
-                    );
+            //below commutators found by brute-force search of all 3-cycles comm(A,B) for length-8 blobs A, B and length-10 blobs A, B
+            List<String> algs=new ArrayList<>(Arrays.asList(
+                    comm("ULURDLDR","DRDLURUL"),
+                    comm("URULDRDL","DRDLURUL"),
+                    comm("RDLDRULU","URULDRDL"),
+                    comm("URDRULDL","LDLURDRU"),
+                    comm("DLULDRUR","DRURDLUL"),
+                    comm("URDRULDL","DLULDRUR")
+            ));
+            if (N==5)
+                //does not reduce BFS diameter
+                algs.addAll(Arrays.asList(
+                        comm("UULDRDLURD","LDLDRULURR"),
+                        comm("LDLULDRURR","DRDRULDLUU"),
+                        comm("LDLDRULURR","RURULDRDLL"),
+                        comm("RRULURDLDL","DRDLDRULUU"),
+                        comm("LLURDRULDR","UURDRULDLD"),
+                        comm("LDRULDLURR","RDLURDRULL"),
+                        comm("LDRULDLURR","DRDRULDLUU"),
+                        comm("RRDRULDLUL","DLDLURDRUU"),
+                        comm("LLDRDLURUR","UULURDLDRD"),
+                        comm("LLURULDRDR","LLDRDLURUR"),
+                        comm("UURDLDRULD","DDRULURDLU"),
+                        comm("RRDLDRULUL","LLURULDRDR"),
+                        comm("DDLURULDRU","UURDLDRULD"),
+                        comm("DDRURDLULU","LDRULDLURR"),
+                        comm("DDLULDRURU","DRDRULDLUU"),
+                        comm("LURDLULDRR","RDLURDRULL"),
+                        comm("UULDLURDRD","DRDRULDLUU"),
+                        comm("UULDRDLURD","DRULDRDLUU"),
+                        comm("RRDLULDRUL","LDRULDLURR"),
+                        comm("DRDRULDLUU","DLDLURDRUU")
+                ));
+            else if (N==6)
+                //does not reduce BFS diameter
+                algs.addAll(Arrays.asList(
+                        comm("DDLURULDRU","URUULDRDDL"),
+                        comm("RURDRULDLL","RDLULLDRUR"),
+                        comm("UULDLURDRD","DRRURDLLUL"),
+                        comm("URUULDRDDL","DRDLDRULUU"),
+                        comm("LLDRDLURUR","ULUURDLDDR"),
+                        comm("ULDDRDLUUR","UULURDLDRD"),
+                        comm("URUULDRDDL","DLDRDLURUU"),
+                        comm("DDLULDRURU","UURDRULDLD"),
+                        comm("URURDLULDD","LULLDRURRD"),
+                        comm("URULURDLDD","DDRDLURULU"),
+                        comm("LDRULDLURR","DRDRULDLUU"),
+                        comm("UULURDLDRD","DDRDLURULU"),
+                        comm("ULDRDDLURU","UURULDRDLD"),
+                        comm("RDRDLURULL","LULURDLDRR"),
+                        comm("DDRURDLULU","LDRULDLURR"),
+                        comm("DRDLDRULUU","RUULURDDLD"),
+                        comm("LDLLURDRRU","LDRRURDLLU"),
+                        comm("DRDRULDLUU","LLDLURRDRU"),
+                        comm("URRDRULLDL","ULULDRURDD"),
+                        comm("DDLDRULURU","UULURDDLDR"),
+                        comm("RULUURDLDD","DLDRDLURUU"),
+                        comm("URRDLULLDR","LDLULDRURR"),
+                        comm("UULDRDLURD","DRULDRDLUU"),
+                        comm("DLDLURDRUU","UURDRULDLD"),
+                        comm("LURRDRULLD","LULDLURDRR"),
+                        comm("LDLULDRURR","URRDRULLDL"),
+                        comm("LLULDRRURD","UURDRULDLD"),
+                        comm("LLDLURDRUR","RURDLLULDR"),
+                        comm("LDDRULUURD","UULURDLDRD"),
+                        comm("LULDRRURDL","RDRURDLULL"),
+                        comm("RRULDLLURD","ULDLLURDRR"),
+                        comm("URDLURULDD","RDDLDRUULU"),
+                        comm("LLDRURDLUR","RRULDLURDL"),
+                        comm("UURDLDDRUL","DDRDLUURUL"),
+                        comm("ULURULDRDD","DRDLDRULUU"),
+                        comm("UURDLDRULD","RDRDLURULL"),
+                        comm("ULLDRURRDL","RURDRULDLL"),
+                        comm("DLURDLDRUU","URDLURULDD"),
+                        comm("DLLULDRRUR","RRULDLURDL"),
+                        comm("RUULURDDLD","RRDLDRULUL"),
+                        comm("LDDRDLUURU","UURULDRDLD"),
+                        comm("LULDLURDRR","LURDRRULDL"),
+                        comm("ULDLLURDRR","RRDRULDLUL"),
+                        comm("DLDLURDRUU","URRDRULLDL"),
+                        comm("RRDRULDLUL","LULLDRURRD"),
+                        comm("RDLUURULDD","DDRDLUURUL"),
+                        comm("RURRDLULLD","DLDLURDRUU"),
+                        comm("LLULDRURDR","RURDLLULDR"),
+                        comm("DRULLDLURR","DRURRDLULL"),
+                        comm("RRDRULLDLU","ULULDRURDD"),
+                        comm("RRULURDLDL","DDLDRUULUR"),
+                        comm("RULUURDLDD","RDRDLURULL"),
+                        comm("ULDDRDLUUR","UURULDRDLD"),
+                        comm("DRDDLURUUL","UURDLDRULD"),
+                        comm("LLURDRULDR","RRULDLURDL"),
+                        comm("DRDDLURUUL","UURULDRDLD"),
+                        comm("RRDLULDRUL","DDLULDRURU"),
+                        comm("DRRULDLLUR","LLULDRURDR"),
+                        comm("UULURDDLDR","DLDRDLURUU"),
+                        comm("DDLDRUULUR","UURULDRDLD"),
+                        comm("ULDRULURDD","DLURDLDRUU"),
+                        comm("RRULURDLDL","DLDDRULUUR"),
+                        comm("UULURDLDRD","DDLDRULURU"),
+                        comm("RDRURDLULL","LLULDRRURD"),
+                        comm("UURULDRDLD","URDLDDRULU"),
+                        comm("LLULDRURDR","URRDRULLDL"),
+                        comm("URRDRULLDL","RULLDLURRD"),
+                        comm("DRDLDRULUU","RULUURDLDD"),
+                        comm("RDLDDRULUU","LULURDLDRR"),
+                        comm("RDLURDRULL","LLDRURDLUR"),
+                        comm("LDRDDLURUU","RRULURDLDL"),
+                        comm("ULURULDRDD","DLDRUULURD"),
+                        comm("LDRRURDLLU","LULDLURDRR"),
+                        comm("URDLURULDD","DRDDLURUUL"),
+                        comm("DLLURDRRUL","DRRURDLLUL"),
+                        comm("URURDLULDD","UULDLURDRD"),
+                        comm("LULURDLDRR","LDLDRULURR"),
+                        comm("LURUULDRDD","LLDRDLURUR"),
+                        comm("DLDDRULUUR","LUURDLDDRU"),
+                        comm("URRDRULLDL","LDRULDLURR"),
+                        comm("ULUURDLDDR","DRULDRDLUU"),
+                        comm("UULDLURDRD","UURDRULDLD"),
+                        comm("DDRDLURULU","ULURULDRDD"),
+                        comm("URDRRULDLL","LLULDRURDR"),
+                        comm("RURDRULDLL","LULDLURDRR"),
+                        comm("UURDLDRULD","RDDLDRUULU")
+                ));
+            else
+                //only reduces BFS diameter for N=7
+                algs.addAll(Arrays.asList(
+                        comm("DDLURULDRU","URUULDRDDL"),
+                        comm("RURDRULDLL","RDLULLDRUR"),
+                        comm("UULDLURDRD","DRRURDLLUL"),
+                        comm("LLDRDLURUR","ULUURDLDDR"),
+                        comm("URDRRULDLL","DLULLDRURR"),
+                        comm("ULDDRDLUUR","UULURDLDRD"),
+                        comm("URUULDRDDL","DRDDLURUUL"),
+                        comm("DDLULDRURU","UURDRULDLD"),
+                        comm("URDRRULDLL","DLLULDRRUR"),
+                        comm("URURDLULDD","LULLDRURRD"),
+                        comm("LDRULDLURR","DRDRULDLUU"),
+                        comm("ULDRDDLURU","UURULDRDLD"),
+                        comm("RDRDLURULL","LULURDLDRR"),
+                        comm("DDLDRUULUR","UURULDDRDL"),
+                        comm("DDRURDLULU","LDRULDLURR"),
+                        comm("URUULDRDDL","LDRDDLURUU"),
+                        comm("LDLLURDRRU","LDRRURDLLU"),
+                        comm("LLULDRRURD","DRURRDLULL"),
+                        comm("DRDRULDLUU","LLDLURRDRU"),
+                        comm("URRDRULLDL","ULULDRURDD"),
+                        comm("URRDLULLDR","LDLULDRURR"),
+                        comm("UULDRDLURD","DRULDRDLUU"),
+                        comm("DLDLURDRUU","UURDRULDLD"),
+                        comm("LURRDRULLD","LULDLURDRR"),
+                        comm("LLULDRRURD","UURDRULDLD"),
+                        comm("RRURDLLULD","LULLDRURRD"),
+                        comm("LLDLURDRUR","RURDLLULDR"),
+                        comm("LDDRULUURD","UULURDLDRD"),
+                        comm("LULDRRURDL","RDRURDLULL"),
+                        comm("ULDLLURDRR","RRURDLLULD"),
+                        comm("RRULDLLURD","ULDLLURDRR"),
+                        comm("URDLURULDD","RDDLDRUULU"),
+                        comm("LLDRURDLUR","RRULDLURDL"),
+                        comm("UURDLDDRUL","DDRDLUURUL"),
+                        comm("UURDLDRULD","RDRDLURULL"),
+                        comm("RULUURDLDD","RDLDDRULUU"),
+                        comm("ULLDRURRDL","RURDRULDLL"),
+                        comm("DLURDLDRUU","URDLURULDD"),
+                        comm("DLLULDRRUR","RRULDLURDL"),
+                        comm("RUULURDDLD","RRDLDRULUL"),
+                        comm("LDDRDLUURU","LUURULDDRD"),
+                        comm("RRDRULLDLU","LLDLURRDRU"),
+                        comm("DLLULDRRUR","RRDRULLDLU"),
+                        comm("LULDLURDRR","LURDRRULDL"),
+                        comm("DLDLURDRUU","URRDRULLDL"),
+                        comm("LDDRDLUURU","RUULURDDLD"),
+                        comm("RDLUURULDD","DDRDLUURUL"),
+                        comm("RURRDLULLD","DLDLURDRUU"),
+                        comm("LLULDRURDR","RURDLLULDR"),
+                        comm("DRULLDLURR","DRURRDLULL"),
+                        comm("RRDRULLDLU","ULULDRURDD"),
+                        comm("RRULURDLDL","DDLDRUULUR"),
+                        comm("LULLDRURRD","URRDRULLDL"),
+                        comm("RULUURDLDD","RDRDLURULL"),
+                        comm("ULDDRDLUUR","UURULDRDLD"),
+                        comm("DRDDLURUUL","UURDLDRULD"),
+                        comm("LLURDRULDR","RRULDLURDL"),
+                        comm("RUULURDDLD","DDLDRUULUR"),
+                        comm("RRDLULDRUL","DDLULDRURU"),
+                        comm("DRRULDLLUR","LLULDRURDR"),
+                        comm("ULDRULURDD","DLURDLDRUU"),
+                        comm("RRULURDLDL","DLDDRULUUR"),
+                        comm("UURULDRDLD","URDLDDRULU"),
+                        comm("URRDRULLDL","RULLDLURRD"),
+                        comm("RDLDDRULUU","LULURDLDRR"),
+                        comm("RDLURDRULL","LLDRURDLUR"),
+                        comm("LDRDDLURUU","RRULURDLDL"),
+                        comm("ULURULDRDD","DLDRUULURD"),
+                        comm("LDRRURDLLU","LULDLURDRR"),
+                        comm("URDLURULDD","DRDDLURUUL"),
+                        comm("LLULDRRURD","RDRRULDLLU"),
+                        comm("DLLURDRRUL","DRRURDLLUL"),
+                        comm("RULUURDLDD","RDDLDRUULU"),
+                        comm("URURDLULDD","UULDLURDRD"),
+                        comm("LULURDLDRR","LDLDRULURR"),
+                        comm("URUULDRDDL","RDLDDRULUU"),
+                        comm("LURUULDRDD","LLDRDLURUR"),
+                        comm("DLDDRULUUR","LUURDLDDRU"),
+                        comm("URRDRULLDL","LDRULDLURR"),
+                        comm("ULUURDLDDR","DRULDRDLUU"),
+                        comm("UULDLURDRD","UURDRULDLD"),
+                        comm("LULLDRURRD","RDRRULDLLU"),
+                        comm("LDLLURDRRU","URRDRULLDL"),
+                        comm("UURDLDRULD","RDDLDRUULU")
+                ));
+            return new LoopoverNRGSetupBFS(N,algs,new int[] {1,0,3,2});
         }
         return null;
     }
