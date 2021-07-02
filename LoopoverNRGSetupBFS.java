@@ -20,29 +20,6 @@ public class LoopoverNRGSetupBFS {
         }
         return out;
     }
-    private static class AList {
-        int[] A;
-        int sz;
-        AList(int n) {
-            A=new int[n];
-            sz=n;
-        }
-        void resize(int n) {
-            int[] tmp=new int[n];
-            System.arraycopy(A,0,tmp,0,Math.min(A.length,n));
-            A=tmp;
-            sz=Math.min(sz,n);
-        }
-        int at(int i) {
-            if (i>=sz) throw new RuntimeException();
-            return A[i];
-        }
-        void add(int v) {
-            if (sz>=A.length)
-                resize(Math.max(1,A.length*2));
-            A[sz++]=v;
-        }
-    }
     private static class Board {
         int N;
         int[][] board;
@@ -255,37 +232,39 @@ public class LoopoverNRGSetupBFS {
         }
         diam=0;
         for (int co=0; co<tuplesAtCost.size(); co++) //Dijkstra's algorithm
-            if (tuplesAtCost.get(co).size()>0) {
-                diam=Math.max(diam,co);
-                for (int f:tuplesAtCost.get(co)) {
-                    int[] locs=decode(f);
-                    for (int d=0; d<4; d++) { //D, R, U, L
-                        int shift=d/2==0?-1:1; //imagine moving the gripped piece in direction d
-                        //then relative to the gripped piece, all other pieces move in the opposite direction
-                        int[] nlocs=new int[locs.length];
-                        for (int i=0; i<locs.length; i++) {
-                            int r=locs[i]/N, c=locs[i]%N;
-                            if (d%2==0) {
-                                if (c!=0) r=mod(r-shift,N);
-                            }
-                            else {
-                                if (r!=0) c=mod(c-shift,N);
-                            }
-                            nlocs[i]=r*N+c;
+        if (tuplesAtCost.get(co).size()>0) {
+            System.out.println(co+":"+tuplesAtCost.get(co).size());
+            diam=Math.max(diam,co);
+            for (int f:tuplesAtCost.get(co)) {
+                int[] locs=decode(f);
+                for (int d=0; d<4; d++) { //D, R, U, L
+                    int shift=d/2==0?-1:1; //imagine moving the gripped piece in direction d
+                    //then relative to the gripped piece, all other pieces move in the opposite direction
+                    int[] nlocs=new int[locs.length];
+                    for (int i=0; i<locs.length; i++) {
+                        int r=locs[i]/N, c=locs[i]%N;
+                        if (d%2==0) {
+                            if (c!=0) r=mod(r-shift,N);
                         }
-                        int nco=co+2;
-                        int code=code(nlocs);
-                        if (nco<cost[code]) {
-                            if (cost[code]!=Integer.MAX_VALUE)
-                                tuplesAtCost.get(cost[code]).remove(code);
-                            par[code]=f*4+d;
-                            cost[code]=nco;
-                            while (nco>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
-                            tuplesAtCost.get(nco).add(code);
+                        else {
+                            if (r!=0) c=mod(c-shift,N);
                         }
+                        nlocs[i]=r*N+c;
+                    }
+                    int nco=co+2;
+                    int code=code(nlocs);
+                    if (nco<cost[code]) {
+                        if (cost[code]!=Integer.MAX_VALUE)
+                            tuplesAtCost.get(cost[code]).remove(code);
+                        par[code]=f*4+d;
+                        cost[code]=nco;
+                        while (nco>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
+                        tuplesAtCost.get(nco).add(code);
                     }
                 }
             }
+            tuplesAtCost.set(co,null);
+        }
         System.out.printf("K=%d,diameter=%d,BFS time=%d%n",K,diam,(System.currentTimeMillis()-sttime));
     }
     //end of BFS part
