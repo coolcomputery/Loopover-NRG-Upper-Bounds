@@ -237,33 +237,27 @@ public class LoopoverNRGSetupBFS {
         int AMT=1; for (int rep=0; rep<K; rep++) AMT*=V;
         par=new int[AMT];
         cost=new int[AMT];
-        Arrays.fill(cost,-1);
+        Arrays.fill(cost,Integer.MAX_VALUE);
         //par[v]=p
         //v=code(L) for some tuple L
         //if p>=0, then p=code(L_p), where L_p is the parent tuple of L in the BFS
         //else, p=-1-i, where tuple L is directly solved by algorithm algs[i]
-        AList[] vertsAtCost;
-        {
-            int maxcost=0; for (String alg:algs) maxcost=Math.max(maxcost,alg.length());
-            vertsAtCost=new AList[2*AMT+maxcost+1];
-            //for (int i=0; i<vertsAtCost.length; i++) vertsAtCost[i]=new AList(0);
-        }
+        List<Set<Integer>> tuplesAtCost=new ArrayList<>();
         for (int ai=0; ai<algs.length; ai++) {
             int c=algs[ai].length();
-            if (vertsAtCost[c]==null) vertsAtCost[c]=new AList(1);
             for (int[] ptset:ptsetss.get(ai)) {
                 int code=code(ptset);
                 par[code]=-1-ai;
                 cost[code]=c;
-                vertsAtCost[c].add(code);
+                while (c>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
+                tuplesAtCost.get(c).add(code);
             }
         }
         diam=0;
-        for (int co=0; co<vertsAtCost.length; co++) //optimized Dijkstra's algorithm
-            if (vertsAtCost[co]!=null) {
+        for (int co=0; co<tuplesAtCost.size(); co++) //Dijkstra's algorithm
+            if (tuplesAtCost.get(co).size()>0) {
                 diam=Math.max(diam,co);
-                for (int fi=0; fi<vertsAtCost[co].sz; fi++) {
-                    int f=vertsAtCost[co].at(fi);
+                for (int f:tuplesAtCost.get(co)) {
                     int[] locs=decode(f);
                     for (int d=0; d<4; d++) { //D, R, U, L
                         int shift=d/2==0?-1:1; //imagine moving the gripped piece in direction d
@@ -279,12 +273,15 @@ public class LoopoverNRGSetupBFS {
                             }
                             nlocs[i]=r*N+c;
                         }
+                        int nco=co+2;
                         int code=code(nlocs);
-                        if (cost[code]==-1) {
+                        if (nco<cost[code]) {
+                            if (cost[code]!=Integer.MAX_VALUE)
+                                tuplesAtCost.get(cost[code]).remove(code);
                             par[code]=f*4+d;
-                            cost[code]=co+2;
-                            if (vertsAtCost[cost[code]]==null) vertsAtCost[cost[code]]=new AList(1);
-                            vertsAtCost[cost[code]].add(code);
+                            cost[code]=nco;
+                            while (nco>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
+                            tuplesAtCost.get(nco).add(code);
                         }
                     }
                 }
