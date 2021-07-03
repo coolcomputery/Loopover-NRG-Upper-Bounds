@@ -1,6 +1,6 @@
 import java.util.*;
 public class LoopoverNRGUpper {
-    private static int upper(int N, LoopoverNRGSetupBFS bfs3, LoopoverNRGSetupBFS bfs4, List<Integer> toSolve) {
+    private static int upper(int N, LoopoverNRGSetup bfs3, LoopoverNRGSetup bfs4, List<Integer> toSolve) {
         //solve one/two pcs at a time, in some arbitrary order
         //assume gripped piece is already solved
         int gr=0, gc=0;
@@ -123,8 +123,8 @@ public class LoopoverNRGUpper {
     public static void main(String[] args) {
         /*int N=5;
         System.out.println("N="+N);
-        LoopoverNRGSetupBFS bfs3=LoopoverNRGSetupBFS.cyc3bfs(N),
-                bfs4=LoopoverNRGSetupBFS.swap22bfs(N);
+        LoopoverNRGSetup bfs3=LoopoverNRGSetup.cyc3bfs(N),
+                bfs4=LoopoverNRGSetup.swap22bfs(N);
         //assume gripped piece is pc 0
         List<Integer> toSolve=new ArrayList<>();
         for (int i=1; i<N*N; i++) toSolve.add(i);
@@ -158,12 +158,13 @@ public class LoopoverNRGUpper {
         int[] S3=new int[Nhi-Nlo+1], S4=new int[Nhi-Nlo+1];
         for (int N=Nlo; N<=Nhi; N++) {
             System.out.println("N="+N);
-            LoopoverNRGSetupBFS bfs3=LoopoverNRGSetupBFS.cyc3bfs(N);
+            LoopoverNRGSetup bfs3= LoopoverNRGSetup.cyc3bfs(N);
             if (bfs3==null) S3[N-Nlo]=-1;
             else S3[N-Nlo]=bfs3.diam;
-            LoopoverNRGSetupBFS bfs4=LoopoverNRGSetupBFS.swap22bfs(N);
+            LoopoverNRGSetup bfs4= LoopoverNRGSetup.swap22bfs(N);
             if (bfs4==null) S4[N-Nlo]=2*S3[N-Nlo];
             else S4[N-Nlo]=bfs4.diam;
+            //LoopoverNRGSetup.verify(bfs3); LoopoverNRGSetup.verify(bfs4);
         }
         String form="%3s%4s%4s%30s%n";
         System.out.printf(form,"N","S3","S4","God's number upper bound");
