@@ -18,7 +18,7 @@ public class LoopoverNRGUpper {
                     //  so that we can move cur to t using a 3-cycle
                     for (int ri=ti+1; ri<T; ri++)
                         if (ri!=ci)
-                            //3-cycle: cur-->t-->third-->cur
+                            //3-cycle: cur-->t-->toSolve.get(ri)-->cur
                             best=Math.min(best,bfs3.cost(new int[] {cur,t,toSolve.get(ri)},gr,gc));
                     worst=Math.max(worst,best);
                 }
@@ -47,7 +47,7 @@ public class LoopoverNRGUpper {
                 for (int bi=ti+2; bi<T; bi++)
                 if (ai!=bi) {
                     int a=toSolve.get(ai), b=toSolve.get(bi);
-                    worst=Math.max(worst,bfs4.cost(new int[] {a,ta,b,tb},gr,gc)); //a-->ta, b-->tb
+                    worst=Math.max(worst,bfs4.cost(new int[] {a,ta,b,tb},gr,gc));
                 }
                 //when a @ tb and b @ ta
                 {
@@ -56,7 +56,7 @@ public class LoopoverNRGUpper {
                     for (int bi=ti+2; bi<T; bi++)
                     if (ai!=bi) {
                         int a=toSolve.get(ai), b=toSolve.get(bi);
-                        best=Math.min(best,bfs4.cost(new int[] {a,b,ta,tb},gr,gc)); //a<-->b, ta<-->tb
+                        best=Math.min(best,bfs4.cost(new int[] {a,b,ta,tb},gr,gc));
                     }
                     worst=Math.max(worst,best);
                 }
@@ -121,40 +121,68 @@ public class LoopoverNRGUpper {
         return out+2*(N/2);
     }
     public static void main(String[] args) {
-        /*int N=5;
-        System.out.println("N="+N);
-        LoopoverNRGSetup bfs3=LoopoverNRGSetup.cyc3bfs(N),
-                bfs4=LoopoverNRGSetup.swap22bfs(N);
-        //assume gripped piece is pc 0
-        List<Integer> toSolve=new ArrayList<>();
-        for (int i=1; i<N*N; i++) toSolve.add(i);
-        int T=toSolve.size();
-        //anneal on list of pieces toSolve
-        long NREPS=10000;
-        double TEMP0=5;
-        int scr=upper(N,bfs3,bfs4,toSolve);
-        SplittableRandom rnd=new SplittableRandom(1);
-        for (long reps=0, accn=0;; reps++) {
-            double temp=TEMP0*(1.0-reps/(double)NREPS);
-            if (reps%1000==0)
-                System.out.printf("%8d%8d%4d %.10f%n",reps,accn,scr,temp);
-            if (reps==NREPS) break;
-            int i=rnd.nextInt(T), j=rnd.nextInt(T-1); if (j>=i) j++;
-            int ti=toSolve.get(i), tj=toSolve.get(j);
-            toSolve.set(i,tj);
-            toSolve.set(j,ti);
-            int nscr=upper(N,bfs3,bfs4,toSolve);
-            if (nscr<=scr||rnd.nextDouble()<Math.exp((scr-nscr)/temp)) {
-                scr=nscr;
-                accn++;
-            }
-            else {
-                toSolve.set(i,ti);
-                toSolve.set(j,tj);
-            }
-        }
-        System.out.println(toSolve);*/
         int Nlo=4, Nhi=10;
+        int[] GNs=new int[Nhi+1];
+        int[][] bestSolveSeqs=new int[Nhi+1][];
+        for (int N=Nlo; N<=Nhi; N++) {
+            long st=System.currentTimeMillis();
+            System.out.println("N="+N);
+            LoopoverNRGSetup bfs3=LoopoverNRGSetup.cyc3bfs(N),
+                    bfs4=LoopoverNRGSetup.swap22bfs(N);
+            //assume gripped piece is pc 0
+            List<Integer> toSolve=new ArrayList<>();
+            for (int i=1; i<N*N; i++) toSolve.add(i);
+            int T=toSolve.size();
+            //anneal on list of pieces to solve
+            long NREPS=(long)(20000*Math.pow(5,8)/Math.pow(N,8));
+            //do fewer SA iterations for larger N because iterations become very slow as N increases
+            System.out.println("NREPS="+NREPS);
+            double TEMP0=2;
+            int scr=upper(N,bfs3,bfs4,toSolve);
+            int bscr=scr;
+            List<Integer> bestTS=new ArrayList<>(toSolve);
+            SplittableRandom rnd=new SplittableRandom(1);
+            String form="%8s%8s%6s %s%n";
+            System.out.printf(form,"REPS","ACCN","GN","temp");
+            for (long reps=0, accn=0;; reps++) {
+                double temp=TEMP0*(1.0-reps/(double)NREPS);
+                if (reps%(NREPS/10)==0||reps==NREPS)
+                    System.out.printf(form,reps,accn,scr,temp);
+                if (reps==NREPS) break;
+                int i=rnd.nextInt(T), j=rnd.nextInt(T-1); if (j>=i) j++;
+                int ti=toSolve.get(i), tj=toSolve.get(j);
+                toSolve.set(i,tj);
+                toSolve.set(j,ti);
+                int nscr=upper(N,bfs3,bfs4,toSolve);
+                if (nscr<=scr||rnd.nextDouble()<Math.exp((scr-nscr)/temp)) {
+                    scr=nscr;
+                    if (scr<bscr) {
+                        bscr=scr;
+                        bestTS=new ArrayList<>(toSolve);
+                    }
+                    accn++;
+                }
+                else {
+                    toSolve.set(i,ti);
+                    toSolve.set(j,tj);
+                }
+            }
+            System.out.println(toSolve);
+            GNs[N]=bscr;
+            {
+                int[] tmp=new int[bestTS.size()];
+                for (int i=0; i<tmp.length; i++)
+                    tmp[i]=bestTS.get(i);
+                bestSolveSeqs[N]=tmp;
+            }
+            System.out.println("bestScr="+bscr+", best list of pieces to solve="+bestTS);
+            System.out.println("SA time="+(System.currentTimeMillis()-st));
+        }
+        String form="%2s%6s  %s%n";
+        System.out.printf(form,"N","GN","best sequence of moves to solve");
+        for (int N=Nlo; N<=Nhi; N++)
+            System.out.printf(form,N,GNs[N],Arrays.toString(bestSolveSeqs[N]));
+        /*
         int[] S3=new int[Nhi-Nlo+1], S4=new int[Nhi-Nlo+1];
         for (int N=Nlo; N<=Nhi; N++) {
             System.out.println("N="+N);
@@ -181,6 +209,6 @@ public class LoopoverNRGUpper {
             for (int K=3; K<=N*N-1; K++) worst=Math.max(worst,Wrow[K]);
             worst+=2*(int)Math.floor(N/2);
             System.out.printf(form,N,S3[N-Nlo],S4[N-Nlo],worst);
-        }
+        }*/
     }
 }
