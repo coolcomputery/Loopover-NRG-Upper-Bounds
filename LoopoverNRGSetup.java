@@ -93,17 +93,18 @@ public class LoopoverNRGSetup {
     public static String comm(String A, String B) {
         return A+B+inv(A)+inv(B);
     }
-    private static char transf(char mv, int type) {
-        if (type==0) return mv=='L'?'R':mv=='R'?'L':mv; //reflect left-right
-        else if (type==1) return mv=='U'?'D':mv=='D'?'U':mv; //reflect top-down
-        else if (type==2) return mv=='D'?'R':mv=='R'?'D':mv=='U'?'L':'U';
-        else throw new RuntimeException("invalid transformation type: "+type);
-    }
     private static String transf(String mvs, int type) {
+        if (type<0||type>=4) throw new RuntimeException("invalid transformation type: "+type);
         if (type==3) return inv(mvs);
         StringBuilder out=new StringBuilder();
-        for (int i=0; i<mvs.length(); i++)
-            out.append(transf(mvs.charAt(i),type));
+        for (int i=0; i<mvs.length(); i++) {
+            char mv=mvs.charAt(i);
+            out.append(
+                    type==0?(mv=='L'?'R':mv=='R'?'L':mv): //reflect board left-right
+                    type==1?(mv=='U'?'D':mv=='D'?'U':mv): //reflect board top-down
+                            (mv=='D'?'R':mv=='R'?'D':mv=='U'?'L':'U') //transpose board
+            );
+        }
         return out.toString();
     }
     public static String transformed(String alg, int b) {
@@ -161,24 +162,43 @@ public class LoopoverNRGSetup {
             out[i]=code%V;
         return out;
     }
-    private static String[] toArr(List<String> algs) {
-        String[] out=new String[algs.size()];
-        for (int i=0; i<out.length; i++)
-            out[i]=algs.get(i);
-        return out;
+    private String reduced(String alg) {
+        //remove redundant moves from alg
+        StringBuilder str=new StringBuilder();
+        for (int i=0; i<alg.length(); i++)
+        if (str.length()>0&&inv(""+str.charAt(str.length()-1)).equals(""+alg.charAt(i)))
+            str.deleteCharAt(str.length()-1);
+        else
+            str.append(alg.charAt(i));
+        StringBuilder out=new StringBuilder();
+        for (int i=0; i<str.length();) {
+            int j=i;
+            while (j<str.length()&&str.charAt(i)==str.charAt(j))
+                j++;
+            int len=(j-i)%N;
+            char mv=str.charAt(i);
+            if (len>N/2) {
+                len=N-len;
+                mv=inv(""+mv).charAt(0);
+            }
+            for (int k=0; k<len; k++)
+                out.append(mv);
+            i=j;
+        }
+        return out.toString();
     }
-    public LoopoverNRGSetup(int N, List<String> algs, int[] P) {
-        this(N,toArr(algs),P);
-    }
-    public LoopoverNRGSetup(int N, String[] algs_init, int[] tP) {
+    public LoopoverNRGSetup(int N, Collection<String> algs_init, int[] tP) {
         this.N=N; V=N*N;
         this.tP=tP;
         {
             Set<String> tmp=new HashSet<>();
             //include inverses and all dihedral symmatries of the initial algorithms
-            for (String alg_init:algs_init)
-            for (int b=0; b<16; b++)
-                tmp.add(transformed(alg_init,b));
+            for (String alg_init:algs_init) {
+                String red=reduced(alg_init);
+                //System.out.println(alg_init+"-->"+red);
+                for (int b=0; b<16; b++)
+                    tmp.add(transformed(red,b));
+            }
             this.algs=new String[tmp.size()];
             int i=0;
             for (String s:tmp) algs[i++]=s;
