@@ -1,5 +1,5 @@
 import java.util.*;
-public class LoopoverNRGSetupBFS {
+public class LoopoverNRGSetup {
     public static final char[] dirNames={'D','R','U','L'};
     private static int mod(int n, int k) {
         return (n%k+k)%k;
@@ -167,10 +167,10 @@ public class LoopoverNRGSetupBFS {
             out[i]=algs.get(i);
         return out;
     }
-    public LoopoverNRGSetupBFS(int N, List<String> algs, int[] P) {
+    public LoopoverNRGSetup(int N, List<String> algs, int[] P) {
         this(N,toArr(algs),P);
     }
-    public LoopoverNRGSetupBFS(int N, String[] algs_init, int[] tP) {
+    public LoopoverNRGSetup(int N, String[] algs_init, int[] tP) {
         this.N=N; V=N*N;
         this.tP=tP;
         {
@@ -227,16 +227,22 @@ public class LoopoverNRGSetupBFS {
             int c=algs[ai].length();
             for (int[] ptset:ptsetss.get(ai)) {
                 int code=code(ptset);
-                par[code]=-1-ai;
-                cost[code]=c;
-                while (c>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
-                tuplesAtCost.get(c).add(code);
+                if (c<cost[code]) {
+                    if (cost[code]!=Integer.MAX_VALUE)
+                        tuplesAtCost.get(cost[code]).remove(code);
+                    par[code]=-1-ai;
+                    cost[code]=c;
+                    while (c>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
+                    tuplesAtCost.get(c).add(code);
+                }
             }
         }
         diam=0;
+        long reached=0;
         for (int co=0; co<tuplesAtCost.size(); co++) //Dijkstra's algorithm
         if (tuplesAtCost.get(co).size()>0) {
             //System.out.println(co+":"+tuplesAtCost.get(co).size());
+            reached+=tuplesAtCost.get(co).size();
             diam=Math.max(diam,co);
             for (int f:tuplesAtCost.get(co)) {
                 int[] locs=decode(f);
@@ -268,6 +274,9 @@ public class LoopoverNRGSetupBFS {
             }
             tuplesAtCost.set(co,null);
         }
+        long expreached=1;
+        for (int rep=0; rep<K; rep++) expreached*=N*N-1-rep;
+        if (reached!=expreached) throw new RuntimeException("Unexpected # of nodes reached: "+reached+" instead of "+expreached);
         System.out.printf("K=%d,diameter=%d,BFS time=%d%n",K,diam,(System.currentTimeMillis()-sttime));
     }
     //end of BFS part
@@ -290,7 +299,7 @@ public class LoopoverNRGSetupBFS {
         return cost[code(nL)];
     }
     //a "blob" is a move sequence that leads to no net displacement in the gripped piece
-    public static LoopoverNRGSetupBFS cyc3bfs(int N) {
+    public static LoopoverNRGSetup cyc3bfs(int N) {
         //3-cycle: pt 0 --> pt 1 --> pt 2 --> pt0
         List<String> algs=new ArrayList<>();
         //below commutators found by brute-force search of all 3-cycles comm(A,B) for length-10 blobs A, B
@@ -327,14 +336,15 @@ public class LoopoverNRGSetupBFS {
             //don't know who discovered this algorithm
         }
         return algs.size()>0?
-                new LoopoverNRGSetupBFS(N,algs,new int[] {1,2,0}):
+                new LoopoverNRGSetup(N,algs,new int[] {1,2,0}):
                 null;
     }
-    public static LoopoverNRGSetupBFS swap22bfs(int N) {
+    public static LoopoverNRGSetup swap22bfs(int N) {
         //double swapper: pt 0 <--> pt 1, pt 2 <--> pt 3
         if (N>=5) {
             //below commutators found by brute-force search of all 3-cycles comm(A,B) for length-8 blobs A, B and length-10 blobs A, B
             List<String> algs=new ArrayList<>(Arrays.asList(
+                    //remove consecutive inverse moves from these algorithms
                     comm("ULURDLDR","DRDLURUL"),
                     comm("URULDRDL","DRDLURUL"),
                     comm("RDLDRULU","URULDRDL"),
@@ -456,7 +466,7 @@ public class LoopoverNRGSetupBFS {
                         comm("RURDRULDLL","LULDLURDRR"),
                         comm("UURDLDRULD","RDDLDRUULU")
                 ));
-            else
+            else if (N>6)
                 //only reduces BFS diameter for N=7
                 algs.addAll(Arrays.asList(
                         comm("DDLURULDRU","URUULDRDDL"),
@@ -544,11 +554,11 @@ public class LoopoverNRGSetupBFS {
                         comm("LDLLURDRRU","URRDRULLDL"),
                         comm("UURDLDRULD","RDDLDRUULU")
                 ));
-            return new LoopoverNRGSetupBFS(N,algs,new int[] {1,0,3,2});
+            return new LoopoverNRGSetup(N,algs,new int[] {1,0,3,2});
         }
         return null;
     }
-    public static void verify(LoopoverNRGSetupBFS bfs) {
+    public static void verify(LoopoverNRGSetup bfs) {
         if (bfs==null) return;
         long st=System.currentTimeMillis();
         int N=bfs.N, K=bfs.K;
