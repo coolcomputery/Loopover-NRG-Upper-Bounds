@@ -1,6 +1,6 @@
 import java.util.*;
 //brute force BFS all permutations of a NxN NRG board
-public class LoopoverNRGBFS {
+public class LoopoverNRGFullBFS {
     private static int mod(int n, int k) {
         return (n%k+k)%k;
     }
