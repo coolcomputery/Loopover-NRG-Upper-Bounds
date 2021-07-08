@@ -192,7 +192,7 @@ public class LoopoverNRGUpper {
         int T=Rfrees.length-1;
         LoopoverNRGBFS[] trees=new LoopoverNRGBFS[T];
         for (int si=0; si<T; si++)
-            trees[si]=new LoopoverNRGBFS(N,N,gr,gc,Rfrees[si],Cfrees[si],Rfrees[si+1],Cfrees[si+1]);
+            trees[si]=new LoopoverNRGBFS(N,N,gr,gc,Rfrees[si],Cfrees[si],Rfrees[si+1],Cfrees[si+1],si==T-1);
         boolean[] fRfree=mask(Rfrees[T]), fCfree=mask(Cfrees[T]);
         List<Integer> toSolve=new ArrayList<>();
         for (int i=0; i<N*N; i++)
@@ -202,7 +202,7 @@ public class LoopoverNRGUpper {
         int out=0;
         System.out.print("GN<=");
         for (int t=0; t<=T; t++) {
-            int v=t==0?(trees[t].D-1):t<T?(trees[t].Dreturning-1):ret[0][0];
+            int v=t<T?(trees[t].D-1):ret[0][0];
             System.out.print((t==0?"":"+")+v);
             out+=v;
         }
@@ -212,18 +212,13 @@ public class LoopoverNRGUpper {
     public static void main(String[] args) {
         new LoopoverNRGUpper(4,0,0).blockUpper(
                 new String[] {"1111","1100"},
-                new String[] {"1111","1100"},
+                new String[] {"1111","1000"},
                 1000000,1
         );
-        new LoopoverNRGUpper(5,0,0).blockUpper( //0x0->2x2->3x3
-                new String[] {"11111","11001","11000"},
-                new String[] {"11111","11001","11000"},
-                1000000,1
-        );
-        new LoopoverNRGUpper(6,0,0).blockUpper( //0x0->2x2->2x4->3x4->4x4
-                new String[] {"111111","110011","110011","110001","110000"},
-                new String[] {"111111","110011","110000","110000","110000"},
-                1000000,1
+        new LoopoverNRGUpper(5,0,0).blockUpper(
+                new String[] {"11111","11001","11001","11000"},
+                new String[] {"11111","10011","10001","10000"},
+                100000,1
         );
     }
 }
