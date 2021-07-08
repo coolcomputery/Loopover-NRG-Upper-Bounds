@@ -22,7 +22,7 @@ public class LoopoverNRGBFS {
     public int ncombos;
     private long[] data;
     public List<int[]> fronts;
-    public int D;
+    public int D, Dreturning;
     //c-->(depth,move from parent combo to c,parent combo)
     private long compressed(int depth, int parent, int move) {
         return ((long)depth*M+move)*ncombos+parent;
@@ -38,6 +38,7 @@ public class LoopoverNRGBFS {
     }
     public LoopoverNRGBFS(int R, int C, int gr, int gc, String rf0, String cf0, String rf1, String cf1) {
         //RxC NRG Loopover, gripped piece at (gr,gc) when board is solved
+        System.out.println(R+"x"+C+": ("+rf0+","+cf0+")-->("+rf1+","+cf1+")");
         long st=System.currentTimeMillis();
         this.R=R; this.C=C;
         Rfree=mask(rf0); Cfree=mask(cf0);
@@ -57,9 +58,11 @@ public class LoopoverNRGBFS {
         for (int r=0; r<R; r++) {
             for (int c=0; c<C; c++)
                 System.out.printf("%4s",
-                        (r==gr&&c==gc?"*":Rfree[r]||Cfree[c]?(Rnfree[r]||Cnfree[c]?"":"'"):"X")
+                        Rfree[r]||Cfree[c]?
+                                ((r==gr&&c==gc?"*":(Rnfree[r]||Cnfree[c]?"":"'"))
+                                        +tofree[r*C+c])
+                                :"X"
                         //X: locked; ': piece that this BFS tree tries to solve; *: gripped piece
-                        +tofree[r*C+c]
                 );
             System.out.println();
         }
@@ -82,9 +85,7 @@ public class LoopoverNRGBFS {
             ncombos=(int)tmp;
         }
         System.out.println("ncombos="+ncombos);
-        M=0;
-        for (boolean b:Rfree) if (b) M+=2;
-        for (boolean b:Cfree) if (b) M+=2;
+        M=2*R+2*C;
         mvactions=new int[M][]; mvs=new int[M][]; {
             //mvactions[m][i]=free loc. that i-th free loc. will go to after the m-th move is applied
             //mv [0,mr,s] --> idx=mr*2+(s+1)/2
@@ -121,7 +122,7 @@ public class LoopoverNRGBFS {
         int reached=0, returningreached=0;
         //a state is "returning" if it keeps the gripped piece at where it is supposed to be
         //TODO: DISTINGUISH SCRAMBLES BASED ON WHETHER THEY PRESERVE GRIPPED PIECE'S SOLVED LOCATION
-        for (D=0;; D++) {
+        for (D=0, Dreturning=0;; D++) {
             if (fronts.get(D).length==0) break;
             reached+=fronts.get(D).length;
             int nreturning=0, sz=0;
@@ -129,7 +130,9 @@ public class LoopoverNRGBFS {
                 int[] scrm=codeCombo(f);
                 if (scrm[0]==solvedscrm[0]) nreturning++;
                 int mr=freeto[scrm[0]]/C, mc=freeto[scrm[0]]%C;
-                int[] mvlist={mr*2,mr*2+1,2*R+mc*2,2*R+mc*2+1};
+                int[] mvlist=Rfree[mr]?
+                                (Cfree[mc]?new int[] {mr*2,mr*2+1,2*R+mc*2,2*R+mc*2+1}:new int[] {mr*2,mr*2+1}):
+                            Cfree[mc]?new int[] {2*R+mc*2,2*R+mc*2+1}:new int[] {};
                 for (int mi:mvlist) {
                     int nf=comboCode(scrm,mvactions[mi]);
                     if (data[nf]==-1) {
@@ -140,11 +143,12 @@ public class LoopoverNRGBFS {
             }
             returningreached+=nreturning;
             System.out.println((D)+":"+fronts.get(D).length+","+nreturning);
+            if (nreturning>0) Dreturning=D+1;
             fronts.add(new int[sz]);
             System.arraycopy(nfront,0,fronts.get(D+1),0,sz);
         }
         System.out.println("#reached="+reached+", #returningreached="+returningreached);
-        System.out.println("D="+D);
+        System.out.println("D="+D+", Dreturning="+Dreturning);
         System.out.println("total time="+(System.currentTimeMillis()-st));
     }
     /*
@@ -216,7 +220,9 @@ public class LoopoverNRGBFS {
         return str.toString();
     }
     public static void main(String[] args) {
-        LoopoverNRGBFS t=new LoopoverNRGBFS(4,4,0,0,"1111","1111","1100","1100"); //GN=27
+        LoopoverNRGBFS t=new LoopoverNRGBFS(5,5,0,0,"11111","11111","11001","11001");
         System.out.println(mvseqStr(t.solvemvs(t.comboCode(new int[] {6,1,2,3,4}))));
+        LoopoverNRGBFS t2=new LoopoverNRGBFS(5,5,0,0,"11001","11001","11000","11000");
+        System.out.println(mvseqStr(t2.solvemvs(t2.comboCode(new int[] {0,1,2,3,4,5}))));
     }
 }
