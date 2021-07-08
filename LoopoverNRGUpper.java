@@ -218,12 +218,12 @@ public class LoopoverNRGUpper {
         new LoopoverNRGUpper(5,0,0).blockUpper( //0x0->2x2->3x3
                 new String[] {"11111","11001","11000"},
                 new String[] {"11111","11001","11000"},
-                100000,1
+                1000000,1
         );
         new LoopoverNRGUpper(6,0,0).blockUpper( //0x0->2x2->2x4->3x4->4x4
                 new String[] {"111111","110011","110011","110001","110000"},
                 new String[] {"111111","110011","110000","110000","110000"},
-                10000,1
+                1000000,1
         );
     }
 }
