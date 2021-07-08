@@ -103,7 +103,7 @@ public class LoopoverNRGBFS {
             for (int rep=0; rep<K; rep++) tmp*=Nfree-rep;
             if (tmp>400_000_000) throw new RuntimeException("Too many combinations to handle.");
             ncombos=(int)tmp;
-            System.out.println("ncombos="+ncombos+", nreturningcombos="+(ncombos/Nfree));
+            System.out.println("ncombos="+ncombos);
         }
         //BFS
         data=new long[ncombos]; Arrays.fill(data,-1);
