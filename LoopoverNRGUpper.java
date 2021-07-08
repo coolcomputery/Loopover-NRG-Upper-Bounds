@@ -1,9 +1,15 @@
 import java.util.*;
 public class LoopoverNRGUpper {
-    private static int upper(int N, LoopoverNRGSetup bfs3, LoopoverNRGSetup bfs4, List<Integer> toSolve) {
+    private int N, gr, gc;
+    private LoopoverNRGSetup bfs3, bfs4;
+    public LoopoverNRGUpper(int N, int gr, int gc) {
+        this.N=N; this.gr=gr; this.gc=gc;
+        bfs3=LoopoverNRGSetup.cyc3bfs(N);
+        bfs4=LoopoverNRGSetup.swap22bfs(N);
+    }
+    private int upper(List<Integer> toSolve) {
         //solve one/two pcs at a time, in some arbitrary order
         //assume gripped piece is already solved
-        int gr=0, gc=0;
         int out=0;
         int T=toSolve.size();
         if (bfs4==null)
@@ -118,97 +124,106 @@ public class LoopoverNRGUpper {
                 out+=worst;
             }
         }
-        return out+2*(N/2);
+        return out;
+    }
+    private int[][] SAupper(List<Integer> pcsToSolve, long NREPS, double TEMP0) {
+        long st=System.currentTimeMillis();
+        System.out.println("N="+N);
+        //assume gripped piece is pc 0
+        SplittableRandom rnd=new SplittableRandom(1);
+        List<Integer> toSolve=new ArrayList<>(pcsToSolve);
+        int T=toSolve.size();
+        System.out.println("T="+T);
+        //shuffle
+        for (int i=T-1; i>0; i--) {
+            int j=rnd.nextInt(i+1), tmp=toSolve.get(i);
+            toSolve.set(i,toSolve.get(j));
+            toSolve.set(j,tmp);
+        }
+        //anneal on list of pieces to solve
+        //do fewer SA iterations for larger N because iterations become very slow as N increases
+        System.out.println("NREPS="+NREPS);
+        int scr=upper(toSolve);
+        int bscr=scr;
+        List<Integer> bestTS=new ArrayList<>(toSolve);
+        String form="%8s%8s%6s %s%n";
+        System.out.printf(form,"REPS","ACCN","GN","temp");
+        for (long reps=0, accn=0;; reps++) {
+            double temp=TEMP0*(1.0-reps/(double)NREPS);
+            if (reps==NREPS||reps%(NREPS/10)==0)
+                System.out.printf(form,reps,accn,scr,temp);
+            if (reps==NREPS) break;
+            int i=rnd.nextInt(T), j=rnd.nextInt(T-1); if (j>=i) j++;
+            int ti=toSolve.get(i), tj=toSolve.get(j);
+            toSolve.set(i,tj);
+            toSolve.set(j,ti);
+            int nscr=upper(toSolve);
+            if (nscr<=scr||rnd.nextDouble()<Math.exp((scr-nscr)/temp)) {
+                scr=nscr;
+                if (scr<bscr) {
+                    bscr=scr;
+                    bestTS=new ArrayList<>(toSolve);
+                }
+                accn++;
+            }
+            else {
+                toSolve.set(i,ti);
+                toSolve.set(j,tj);
+            }
+        }
+        System.out.println("bestScr="+bscr+", best list of pieces to solve="+bestTS);
+        System.out.println("SA time="+(System.currentTimeMillis()-st));
+        int[] tmp=new int[bestTS.size()];
+        for (int i=0; i<tmp.length; i++)
+            tmp[i]=bestTS.get(i);
+        int s3=bfs3.diam, s4=bfs4==null?2*s3:bfs4.diam;
+        int simplescr=Math.max(s3+(T-3)/2*Math.min(s3,s4),s4+(T-4)/2*Math.min(s3,s4));
+        System.out.println("simplescr="+simplescr);
+        return new int[][] {{Math.min(bscr,simplescr)},tmp};
+    }
+    private static boolean[] mask(String s) {
+        boolean[] out=new boolean[s.length()];
+        for (int i=0; i<s.length(); i++)
+            out[i]=s.charAt(i)=='1';
+        return out;
+    }
+    private int blockUpper(String[] Rfrees, String[] Cfrees, long NREPS, double TEMP0) {
+        //must leave 2 rows and 2 columns free at the end
+        int T=Rfrees.length-1;
+        LoopoverNRGBFS[] trees=new LoopoverNRGBFS[T];
+        for (int si=0; si<T; si++)
+            trees[si]=new LoopoverNRGBFS(N,N,gr,gc,Rfrees[si],Cfrees[si],Rfrees[si+1],Cfrees[si+1]);
+        boolean[] fRfree=mask(Rfrees[T]), fCfree=mask(Cfrees[T]);
+        List<Integer> toSolve=new ArrayList<>();
+        for (int i=0; i<N*N; i++)
+            if ((i/N!=gr||i%N!=gc)&&(fRfree[i/N]||fCfree[i%N]))
+                toSolve.add(i);
+        int[][] ret=SAupper(toSolve,NREPS,TEMP0);
+        int out=0;
+        System.out.print("GN<=");
+        for (int t=0; t<=T; t++) {
+            int v=t==0?(trees[t].D-1):t<T?(trees[t].Dreturning-1):ret[0][0];
+            System.out.print((t==0?"":"+")+v);
+            out+=v;
+        }
+        System.out.println("="+out);
+        return out;
     }
     public static void main(String[] args) {
-        int Nlo=4, Nhi=10;
-        int[] GNs=new int[Nhi+1];
-        int[][] bestSolveSeqs=new int[Nhi+1][];
-        for (int N=Nlo; N<=Nhi; N++) {
-            long st=System.currentTimeMillis();
-            System.out.println("N="+N);
-            LoopoverNRGSetup bfs3=LoopoverNRGSetup.cyc3bfs(N),
-                    bfs4=LoopoverNRGSetup.swap22bfs(N);
-            //assume gripped piece is pc 0
-            List<Integer> toSolve=new ArrayList<>();
-            for (int i=1; i<N*N; i++) toSolve.add(i);
-            int T=toSolve.size();
-            //anneal on list of pieces to solve
-            long NREPS=(long)(20000*Math.pow(5,8)/Math.pow(N,8));
-            //do fewer SA iterations for larger N because iterations become very slow as N increases
-            System.out.println("NREPS="+NREPS);
-            double TEMP0=2;
-            int scr=upper(N,bfs3,bfs4,toSolve);
-            int bscr=scr;
-            List<Integer> bestTS=new ArrayList<>(toSolve);
-            SplittableRandom rnd=new SplittableRandom(1);
-            String form="%8s%8s%6s %s%n";
-            System.out.printf(form,"REPS","ACCN","GN","temp");
-            for (long reps=0, accn=0;; reps++) {
-                double temp=TEMP0*(1.0-reps/(double)NREPS);
-                if (reps%(NREPS/10)==0||reps==NREPS)
-                    System.out.printf(form,reps,accn,scr,temp);
-                if (reps==NREPS) break;
-                int i=rnd.nextInt(T), j=rnd.nextInt(T-1); if (j>=i) j++;
-                int ti=toSolve.get(i), tj=toSolve.get(j);
-                toSolve.set(i,tj);
-                toSolve.set(j,ti);
-                int nscr=upper(N,bfs3,bfs4,toSolve);
-                if (nscr<=scr||rnd.nextDouble()<Math.exp((scr-nscr)/temp)) {
-                    scr=nscr;
-                    if (scr<bscr) {
-                        bscr=scr;
-                        bestTS=new ArrayList<>(toSolve);
-                    }
-                    accn++;
-                }
-                else {
-                    toSolve.set(i,ti);
-                    toSolve.set(j,tj);
-                }
-            }
-            System.out.println(toSolve);
-            GNs[N]=bscr;
-            {
-                int[] tmp=new int[bestTS.size()];
-                for (int i=0; i<tmp.length; i++)
-                    tmp[i]=bestTS.get(i);
-                bestSolveSeqs[N]=tmp;
-            }
-            System.out.println("bestScr="+bscr+", best list of pieces to solve="+bestTS);
-            System.out.println("SA time="+(System.currentTimeMillis()-st));
-        }
-        String form="%2s%6s  %s%n";
-        System.out.printf(form,"N","GN","best sequence of moves to solve");
-        for (int N=Nlo; N<=Nhi; N++)
-            System.out.printf(form,N,GNs[N],Arrays.toString(bestSolveSeqs[N]));
-        /*
-        int[] S3=new int[Nhi-Nlo+1], S4=new int[Nhi-Nlo+1];
-        for (int N=Nlo; N<=Nhi; N++) {
-            System.out.println("N="+N);
-            LoopoverNRGSetup bfs3= LoopoverNRGSetup.cyc3bfs(N);
-            if (bfs3==null) S3[N-Nlo]=-1;
-            else S3[N-Nlo]=bfs3.diam;
-            LoopoverNRGSetup bfs4= LoopoverNRGSetup.swap22bfs(N);
-            if (bfs4==null) S4[N-Nlo]=2*S3[N-Nlo];
-            else S4[N-Nlo]=bfs4.diam;
-            //LoopoverNRGSetup.verify(bfs3); LoopoverNRGSetup.verify(bfs4);
-        }
-        String form="%3s%4s%4s%30s%n";
-        System.out.printf(form,"N","S3","S4","God's number upper bound");
-        for (int N=Nlo; N<=Nhi; N++) {
-            int s3=S3[N-Nlo], s4=S4[N-Nlo];
-            int[] Wrow=new int[N*N];
-            Wrow[3]=s3; Wrow[4]=s4;
-            for (int K=5; K<=N*N-1; K++) {
-                Wrow[K]=Wrow[K-2]+Math.min(s3,s4);
-                if (K%4==0 && Wrow[K]<K/4*s4)
-                    throw new RuntimeException();
-            }
-            int worst=0;
-            for (int K=3; K<=N*N-1; K++) worst=Math.max(worst,Wrow[K]);
-            worst+=2*(int)Math.floor(N/2);
-            System.out.printf(form,N,S3[N-Nlo],S4[N-Nlo],worst);
-        }*/
+        new LoopoverNRGUpper(4,0,0).blockUpper(
+                new String[] {"1111","1100"},
+                new String[] {"1111","1100"},
+                1000000,1
+        );
+        new LoopoverNRGUpper(5,0,0).blockUpper( //0x0->2x2->3x3
+                new String[] {"11111","11001","11000"},
+                new String[] {"11111","11001","11000"},
+                100000,1
+        );
+        new LoopoverNRGUpper(6,0,0).blockUpper( //0x0->2x2->2x4->3x4->4x4
+                new String[] {"111111","110011","110011","110001","110000"},
+                new String[] {"111111","110011","110000","110000","110000"},
+                10000,1
+        );
     }
 }
