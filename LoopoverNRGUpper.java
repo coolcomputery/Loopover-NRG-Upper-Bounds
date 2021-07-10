@@ -181,6 +181,15 @@ public class LoopoverNRGUpper {
         System.out.println("simplescr="+simplescr);
         return new int[][] {{Math.min(bscr,simplescr)},tmp};
     }
+    private int[][] SAupper(String Rfree, String Cfree, long NREPS, double TEMP0) {
+        System.out.println("SA "+Rfree+"x"+Cfree);
+        boolean[] fRfree=mask(Rfree), fCfree=mask(Cfree);
+        List<Integer> toSolve=new ArrayList<>();
+        for (int i=0; i<N*N; i++)
+            if ((i/N!=gr||i%N!=gc)&&(fRfree[i/N]||fCfree[i%N]))
+                toSolve.add(i);
+        return SAupper(toSolve,NREPS,TEMP0);
+    }
     private static boolean[] mask(String s) {
         boolean[] out=new boolean[s.length()];
         for (int i=0; i<s.length(); i++)
@@ -210,22 +219,18 @@ public class LoopoverNRGUpper {
         return out;
     }
     public static void main(String[] args) {
-        new LoopoverNRGUpper(4,0,0).blockUpper(
+        /*new LoopoverNRGUpper(4,0,0).blockUpper(
                 new String[] {"1111","1100"},
                 new String[] {"1111","1000"},
                 1000000,1
-        );
+        );*/ //sum of phase GNs: 24
         /*new LoopoverNRGUpper(5,0,0).blockUpper(
                 new String[] {"11111","11001","11001","11000"},
                 new String[] {"11111","10011","10001","10000"},
                 100000,1
-        );*/
-        boolean[] fRfree=mask("10001"), fCfree=mask("10000");
-        List<Integer> toSolve=new ArrayList<>();
-        int N=5, gr=0, gc=0;
-        for (int i=0; i<N*N; i++)
-            if ((i/N!=gr||i%N!=gc)&&(fRfree[i/N]||fCfree[i%N]))
-                toSolve.add(i);
-        new LoopoverNRGUpper(5,0,0).SAupper(toSolve,100000,1);
+        );*/ //sum of phase GNs: 21+24+66
+        new LoopoverNRGUpper(4,0,0).SAupper("1100","1000",1000000,1);
+        new LoopoverNRGUpper(5,0,0).SAupper("11000","10000",100000,1);
+        new LoopoverNRGUpper(6,0,0).SAupper("110000","110000",10000,1);
     }
 }
