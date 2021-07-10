@@ -141,6 +141,33 @@ public class LoopoverNRGSetup {
             P[i]=toMovedLocs[perm[L[i]]];
         return new int[][] {L,P};
     }
+    public static String reduced(int N, String alg) {
+        //remove redundant moves from alg
+        StringBuilder str=new StringBuilder();
+        for (int i=0; i<alg.length(); i++)
+            if (str.length()>0&&inv(""+str.charAt(str.length()-1)).equals(""+alg.charAt(i)))
+                str.deleteCharAt(str.length()-1);
+            else
+                str.append(alg.charAt(i));
+        StringBuilder out=new StringBuilder();
+        for (int i=0; i<str.length();) {
+            int j=i;
+            while (j<str.length()&&str.charAt(i)==str.charAt(j))
+                j++;
+            int len=(j-i)%N;
+            char mv=str.charAt(i);
+            if (len>N/2) {
+                len=N-len;
+                mv=inv(""+mv).charAt(0);
+            }
+            else if (2*len==N)
+                mv=mv=='L'?'R':mv=='U'?'D':mv;
+            for (int k=0; k<len; k++)
+                out.append(mv);
+            i=j;
+        }
+        return out.toString();
+    }
 
     //start of BFS part
     private int N, V, K;
@@ -162,31 +189,6 @@ public class LoopoverNRGSetup {
             out[i]=code%V;
         return out;
     }
-    private String reduced(String alg) {
-        //remove redundant moves from alg
-        StringBuilder str=new StringBuilder();
-        for (int i=0; i<alg.length(); i++)
-        if (str.length()>0&&inv(""+str.charAt(str.length()-1)).equals(""+alg.charAt(i)))
-            str.deleteCharAt(str.length()-1);
-        else
-            str.append(alg.charAt(i));
-        StringBuilder out=new StringBuilder();
-        for (int i=0; i<str.length();) {
-            int j=i;
-            while (j<str.length()&&str.charAt(i)==str.charAt(j))
-                j++;
-            int len=(j-i)%N;
-            char mv=str.charAt(i);
-            if (len>N/2) {
-                len=N-len;
-                mv=inv(""+mv).charAt(0);
-            }
-            for (int k=0; k<len; k++)
-                out.append(mv);
-            i=j;
-        }
-        return out.toString();
-    }
     public LoopoverNRGSetup(int N, Collection<String> algs_init, int[] tP) {
         this.N=N; V=N*N;
         this.tP=tP;
@@ -194,10 +196,20 @@ public class LoopoverNRGSetup {
             Set<String> tmp=new HashSet<>();
             //include inverses and all dihedral symmatries of the initial algorithms
             for (String alg_init:algs_init) {
-                String red=reduced(alg_init);
+                String red=reduced(N,alg_init);
+                //every rotated version of a X-cycle is another X-cycle
+                //to see why, let a X-cycle algorithm consist of moves M=[M[0]...M[L-1]]
+                //then a rotated version M[a]...M[L-1] M[0]...M[a-1] can be written as S M S^-1,
+                //where S=inv([M[0]...M[a-1]])
+                //i.e. every rotated version of M is M combined with some setup moves
                 //System.out.println(alg_init+"-->"+red);
-                for (int b=0; b<16; b++)
-                    tmp.add(transformed(red,b));
+                for (int i=0; i<red.length(); i++) {
+                    StringBuilder s=new StringBuilder();
+                    for (int k=0; k<red.length(); k++)
+                        s.append(red.charAt((k+i)%red.length()));
+                    for (int b=0; b<16; b++)
+                        tmp.add(transformed(s.toString(),b));
+                }
             }
             this.algs=new String[tmp.size()];
             int i=0;
@@ -342,18 +354,18 @@ public class LoopoverNRGSetup {
                     comm("UURULDRDLD","DLURDLDRUU")
             ));
         if (N%2==0) {
-            StringBuilder rd=new StringBuilder(), lu=new StringBuilder();
-            for (int r=0; r<N/2; r++) {
-                rd.append('R'); lu.append('L');
+            for (int height=1; height<=N/2; height++) {
+                StringBuilder rd=new StringBuilder();
+                for (int r=0; r<N/2; r++) rd.append('R');
+                for (int r=0; r<height; r++) rd.append('D');
+                StringBuilder alg=new StringBuilder();
+                alg.append(rd).append(rd);
+                if (height<N/2)
+                for (int i=0; i<N+2*height; i++)
+                    alg.append(inv(""+alg.charAt(i)));
+                alg.append(alg);
+                algs.add(alg.toString());
             }
-            for (int r=0; r<N/2; r++) {
-                rd.append('D'); lu.append('U');
-            }
-            StringBuilder alg=new StringBuilder();
-            alg.append(rd).append(lu);
-            alg.append(alg);
-            algs.add(alg.toString());
-            //don't know who discovered this algorithm
         }
         return algs.size()>0?
                 new LoopoverNRGSetup(N,algs,new int[] {1,2,0}):
