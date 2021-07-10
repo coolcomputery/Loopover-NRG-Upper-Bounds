@@ -215,10 +215,17 @@ public class LoopoverNRGUpper {
                 new String[] {"1111","1000"},
                 1000000,1
         );
-        new LoopoverNRGUpper(5,0,0).blockUpper(
+        /*new LoopoverNRGUpper(5,0,0).blockUpper(
                 new String[] {"11111","11001","11001","11000"},
                 new String[] {"11111","10011","10001","10000"},
                 100000,1
-        );
+        );*/
+        boolean[] fRfree=mask("10001"), fCfree=mask("10000");
+        List<Integer> toSolve=new ArrayList<>();
+        int N=5, gr=0, gc=0;
+        for (int i=0; i<N*N; i++)
+            if ((i/N!=gr||i%N!=gc)&&(fRfree[i/N]||fCfree[i%N]))
+                toSolve.add(i);
+        new LoopoverNRGUpper(5,0,0).SAupper(toSolve,100000,1);
     }
 }
