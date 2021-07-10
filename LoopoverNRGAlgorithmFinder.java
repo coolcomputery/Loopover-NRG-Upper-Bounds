@@ -1,75 +1,78 @@
 import java.util.*;
 public class LoopoverNRGAlgorithmFinder {
-    private static int[] seq, freq;
-    private static void dfs(int idx, List<String> out) {
+    private static int mod(int n, int k) {
+        return (n%k+k)%k;
+    }
+    private static int N;
+    private static long st;
+    private static int amt, bscr, streak;
+    private static int[] seq;
+    private static int dr, dc;
+    private static Map<String,int[][]> results;
+    private static void dfs(int idx) {
         //System.out.println(idx);
         if (idx==seq.length) {
             //System.out.println(Arrays.toString(freq));
-            if (freq[0]==freq[2]&&freq[1]==freq[3]) {
+            if (dr==0&&dc==0) {
                 StringBuilder tmp=new StringBuilder();
                 for (int i=0; i<seq.length; i++)
-                    tmp.append(LoopoverNRGSetupBFS.dirNames[seq[i]]);
-                out.add(tmp.toString());
+                    tmp.append(LoopoverNRGSetup.dirNames[seq[i]]);
+                String alg=LoopoverNRGSetup.reduced(N,tmp.toString());
+                int[][] ret=LoopoverNRGSetup.effect(N,alg);
+                int scr=ret[0].length;
+                if (scr<=bscr&&scr>0) {
+                    if (scr<bscr) {
+                        bscr=scr;
+                        results.clear();
+                    }
+                    results.put(alg,ret);
+                }
+                amt++;
+                if (amt%10_000_000==0)
+                    System.out.println("#checked="+amt+", time="+(System.currentTimeMillis()-st));
             }
             return;
         }
         for (int m=0; m<4; m++)
-        if (idx==0||m!=(seq[idx-1]+2)%4) {
+        if (idx==0||(m!=(seq[idx-1]+2)%4&&(m!=seq[idx-1]||streak+1<=N/2))) {
             seq[idx]=m;
-            freq[m]++;
-            dfs(idx+1,out);
+            int dr0=dr, dc0=dc;
+            if (m==0) dr=mod(dr+1,N);
+            else if (m==2) dr=mod(dr-1,N);
+            else if (m==1) dc=mod(dc+1,N);
+            else dc=mod(dc-1,N);
+            int streak0=streak;
+            streak=idx>0&&m==seq[idx-1]?(streak+1):1;
+            dfs(idx+1);
             seq[idx]=-1;
-            freq[m]--;
+            dr=dr0; dc=dc0;
+            streak=streak0;
         }
     }
-    private static List<String> blobs(int K) {
-        List<String> out=new ArrayList<>();
+    private static void blobs(int K) {
+        amt=0;
+        bscr=Integer.MAX_VALUE;
+        results=new HashMap<>();
         seq=new int[K]; Arrays.fill(seq,-1);
-        freq=new int[4];
-        dfs(0,out);
-        return out;
+        dfs(0);
+        System.out.println("#blobs="+amt);
+        System.out.println("bscr="+bscr);
     }
     public static void main(String[] args) {
-        long st=System.currentTimeMillis();
-        int N=6, KA=10, KB=10;
-        System.out.printf("N=%d,KA=%d,KB=%d%n",N,KA,KB);
-        List<String> blobsA=blobs(KA), blobsB=blobs(KB);
-        Map<String,int[][]> results=new HashMap<>();
-        for (String a:blobsA)
-        for (String b:blobsB) {
-            String alg=LoopoverNRGSetupBFS.comm(a,b);
-            int[][] ret=LoopoverNRGSetupBFS.effect(N,alg);
-            if (ret[0].length<=4&&ret[0].length>0)
-                results.put(alg,ret);
-        }
-        Set<String> primaryAlgs=new HashSet<>(), seen=new HashSet<>();
-        for (String alg:results.keySet())
-        if (!seen.contains(alg)) {
-            primaryAlgs.add(alg);
-            for (int b=0; b<16; b++)
-                seen.add(LoopoverNRGSetupBFS.transformed(alg,b));
-        }
-        System.out.println(primaryAlgs);
-        for (int K=3; K<=4; K++) {
-            System.out.println("\nK="+K);
-            for (String alg:primaryAlgs)
-            if (results.get(alg)[0].length==K) {
-                String A=alg.substring(0,KA),
-                        B=alg.substring(KA,KA+KB);
-                System.out.println("comm(\""+A+"\",\""+B+"\"),");
-            }
-            for (String alg:primaryAlgs) {
-                int[] locs=results.get(alg)[0];
-                if (locs.length==K) {
-                    for (int loc:locs) {
-                        int r=loc/N, c=loc%N;
-                        if (r>N/2) r-=N; if (c>N/2) c-=N;
-                        System.out.print("("+r+","+c+"),");
-                    }
-                    System.out.println();
+        N=4;
+        for (int L=1; L<=24; L++) {
+            System.out.println("L="+L);
+            st=System.currentTimeMillis();
+            blobs(L);
+            Set<String> primaryAlgs=new HashSet<>(), seen=new HashSet<>();
+            for (String alg:results.keySet())
+                if (!seen.contains(alg)) {
+                    primaryAlgs.add(alg);
+                    for (int b=0; b<16; b++)
+                        seen.add(LoopoverNRGSetup.transformed(alg,b));
                 }
-            }
+            System.out.println(primaryAlgs);
+            System.out.println("time="+(System.currentTimeMillis()-st));
         }
-        System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
