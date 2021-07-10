@@ -150,11 +150,11 @@ public class LoopoverNRGBFS {
                     }
                 }
             }
-            System.out.println((D)+":"+fronts.get(D).length);
+            System.out.print((D>0?" ":"")+D+":"+fronts.get(D).length);
             fronts.add(new int[sz]);
             System.arraycopy(nfront,0,fronts.get(D+1),0,sz);
         }
-        System.out.println("#reached="+reached);
+        System.out.println("\n#reached="+reached);
         if (reached!=ncombos)
             System.out.printf("WARNING: reached=%d!=ncombos=%d%n",reached,ncombos);
         System.out.println("D="+D);
