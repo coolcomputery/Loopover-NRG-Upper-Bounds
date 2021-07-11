@@ -1,76 +1,119 @@
 import java.util.*;
 public class LoopoverNRGAlgorithmFinder {
+    //a "blob" in a NxN Loopover NRG board is a move sequence that has no net displacement on the gripped piece
+    //a "strict blob" is a blob with the additional constraint that all rows and all columns have no "net shift"
     private static int mod(int n, int k) {
         return (n%k+k)%k;
     }
-    private static int N;
-    private static long st;
-    private static int amt, bscr, streak;
-    private static int[] seq;
-    private static int dr, dc;
+    private static int N, K;
+    private static long st, mark;
+    private static int bscr;
+    private static long ncalls, amt;
+    private static int[] syllLens;
+    private static int[] rshift, cshift;
     private static Map<String,int[][]> results;
-    private static void dfs(int idx) {
-        //System.out.println(idx);
-        if (idx==seq.length) {
+    //WLOG assume the first syllable is horizontal
+    private static void dfs(int idx, int tlen, int dr, int dc) {
+        if (System.currentTimeMillis()-st>=mark) {
+            mark+=20_000;
+            System.out.printf("%10.3f%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,amt);
+        }
+        //tlen=current length of move sequence that syllLens[0:idx] represents
+        ncalls++;
+        if (Math.min(dr,N-dr)+Math.min(dc,N-dc)>K-tlen)
+            //gripped piece is too far to bring back to beginning in enough moves
+            return;
+        int mincost=0;
+        for (int r=0; r<N; r++)
+            mincost+=Math.min(rshift[r],N-rshift[r]);
+        for (int c=0; c<N; c++)
+            mincost+=Math.min(cshift[c],N-cshift[c]);
+        if (mincost>K-tlen) //not enough moves available to unshift all rows and columns
+            return;
+        //System.out.println(tlen);
+        if (tlen==K) {
             //System.out.println(Arrays.toString(freq));
             if (dr==0&&dc==0) {
-                StringBuilder tmp=new StringBuilder();
-                for (int i=0; i<seq.length; i++)
-                    tmp.append(LoopoverNRGSetup.dirNames[seq[i]]);
-                String alg=LoopoverNRGSetup.reduced(N,tmp.toString());
-                int[][] ret=LoopoverNRGSetup.effect(N,alg);
-                int scr=ret[0].length;
-                if (scr<=bscr&&scr>0) {
-                    if (scr<bscr) {
-                        bscr=scr;
-                        results.clear();
+                boolean good=true;
+                for (int r=0; r<N&&good; r++) if (rshift[r]!=0) good=false;
+                for (int c=0; c<N&&good; c++) if (cshift[c]!=0) good=false;
+                if (good) {
+                    StringBuilder tmp=new StringBuilder();
+                    for (int i=0; i<idx; i++) {
+                        int reps=Math.abs(syllLens[i]);
+                        for (int rep=0; rep<reps; rep++)
+                            tmp.append(i%2==0?(syllLens[i]>0?'R':'L'):(syllLens[i]>0?'D':'U'));
                     }
-                    results.put(alg,ret);
+                    String alg=tmp.toString();
+                    int[][] ret=LoopoverNRGSetup.effect(N,alg);
+                    int scr=ret[0].length;
+                    if (scr<=bscr&&scr>0) {
+                        if (scr<bscr) {
+                            bscr=scr;
+                            results.clear();
+                        }
+                        results.put(alg,ret);
+                    }
+                    amt++;
+                    if (amt%10_000_000==0)
+                        System.out.println("#checked="+amt+", time="+(System.currentTimeMillis()-st));
                 }
-                amt++;
-                if (amt%10_000_000==0)
-                    System.out.println("#checked="+amt+", time="+(System.currentTimeMillis()-st));
             }
             return;
         }
-        for (int m=0; m<4; m++)
-        if (idx==0||(m!=(seq[idx-1]+2)%4&&(m!=seq[idx-1]||streak+1<=N/2))) {
-            seq[idx]=m;
-            int dr0=dr, dc0=dc;
-            if (m==0) dr=mod(dr+1,N);
-            else if (m==2) dr=mod(dr-1,N);
-            else if (m==1) dc=mod(dc+1,N);
-            else dc=mod(dc-1,N);
-            int streak0=streak;
-            streak=idx>0&&m==seq[idx-1]?(streak+1):1;
-            dfs(idx+1);
-            seq[idx]=-1;
-            dr=dr0; dc=dc0;
-            streak=streak0;
+        for (int offset=1; offset<N; offset++) {
+            int len=Math.min(offset,N-offset);
+            if (tlen+len<=K) {
+                syllLens[idx]=offset<=N-offset?len:(-len);
+                if (idx%2==0) { //horizontal syllable
+                    rshift[dr]=mod(rshift[dr]+offset,N);
+                    dfs(idx+1,tlen+len,dr,mod(dc+offset,N));
+                    rshift[dr]=mod(rshift[dr]-offset,N);
+                }
+                else { //vertical syllable
+                    cshift[dc]=mod(cshift[dc]+offset,N);
+                    dfs(idx+1,tlen+len,mod(dr+offset,N),dc);
+                    cshift[dc]=mod(cshift[dc]-offset,N);
+                }
+            }
         }
     }
     private static void blobs(int K) {
         amt=0;
         bscr=Integer.MAX_VALUE;
         results=new HashMap<>();
-        seq=new int[K]; Arrays.fill(seq,-1);
-        dfs(0);
-        System.out.println("#blobs="+amt);
+        syllLens=new int[K];
+        ncalls=0;
+        LoopoverNRGAlgorithmFinder.K=K;
+        rshift=new int[N]; cshift=new int[N];
+        mark=0;
+        dfs(0,0,0,0);
+        System.out.println("#dfs() calls="+ncalls);
+        System.out.println("#strict blobs="+amt);
         System.out.println("bscr="+bscr);
     }
     public static void main(String[] args) {
-        N=4;
-        for (int L=1; L<=24; L++) {
+        //TODO: FIND <=32-MOVE 3-CYCLE
+        N=5;
+        for (int L=28; L<=32; L++) {
             System.out.println("L="+L);
             st=System.currentTimeMillis();
             blobs(L);
             Set<String> primaryAlgs=new HashSet<>(), seen=new HashSet<>();
-            for (String alg:results.keySet())
-                if (!seen.contains(alg)) {
-                    primaryAlgs.add(alg);
-                    for (int b=0; b<16; b++)
-                        seen.add(LoopoverNRGSetup.transformed(alg,b));
+            for (String alg:results.keySet()) {
+                String red=LoopoverNRGSetup.reduced(N,alg);
+                if (!seen.contains(red)) {
+                    primaryAlgs.add(red);
+                    for (int i=0; i<red.length(); i++) {
+                        StringBuilder s=new StringBuilder();
+                        //count rotated/reflected/inverted versions of an algorithm to be equivalent
+                        for (int k=0; k<red.length(); k++)
+                            s.append(red.charAt((k+i)%red.length()));
+                        for (int b=0; b<16; b++)
+                            seen.add(LoopoverNRGSetup.reduced(N,LoopoverNRGSetup.transformed(s.toString(),b)));
+                    }
                 }
+            }
             System.out.println(primaryAlgs);
             System.out.println("time="+(System.currentTimeMillis()-st));
         }
