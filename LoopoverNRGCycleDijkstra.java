@@ -53,6 +53,9 @@ public class LoopoverNRGCycleDijkstra {
         this(gr,gc,tobmat(A.split(",")),tobmat(B.split(",")));
     }
     private LoopoverNRGCycleDijkstra(int gr, int gc, boolean[][] A, boolean[][] B) {
+        this(gr,gc,A,B,null);
+    }
+    private LoopoverNRGCycleDijkstra(int gr, int gc, boolean[][] A, boolean[][] B, LoopoverNRGSetup[] bfss) {
         long st=System.currentTimeMillis();
         R=A.length; C=A[0].length;
         if (R!=C) throw new RuntimeException("Only square board sizes allowed."); //need to refactor LoopoverNRGSetup before I can remove this constraint
@@ -67,7 +70,7 @@ public class LoopoverNRGCycleDijkstra {
             Nfree++;
         }
         freeto=Arrays.copyOfRange(freeto,0,Nfree);
-        for (int r=0; r<R; r++) {
+        /*for (int r=0; r<R; r++) {
             for (int c=0; c<C; c++)
                 System.out.printf("%4s",
                         r==gr&&c==gc?"*":
@@ -77,9 +80,9 @@ public class LoopoverNRGCycleDijkstra {
                         //X: locked; ': piece that this BFS tree tries to solve; *: gripped piece
                 );
             System.out.println();
-        }
+        }*/
         blobs=new ArrayList<>(); List<int[]> blobactions=new ArrayList<>();
-        LoopoverNRGSetup[] bfss={LoopoverNRGSetup.cyc3bfs(R), LoopoverNRGSetup.swap22bfs(R)};
+        if (bfss==null) bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3bfs(R), LoopoverNRGSetup.swap22bfs(R)};
         for (LoopoverNRGSetup bfs:bfss) if (bfs!=null) { //table of all possible 3-cycle algorithms we will need
             int offset=blobs.size();
             int T=bfs.tP.length; //the number of pieces that will be cycled
@@ -122,38 +125,69 @@ public class LoopoverNRGCycleDijkstra {
             tmp*=Nfree-rep;
         if (tmp>400_000_000) throw new RuntimeException("Too many combos: "+tmp);
         ncombos=(int)tmp;
-        depth=new int[ncombos]; Arrays.fill(depth,Integer.MAX_VALUE); par=new int[ncombos]; blobi=new int[ncombos];
-        System.out.println("ncombos="+ncombos);
-        List<Set<Integer>> fronts=new ArrayList<>(); fronts.add(new HashSet<>());
+        //System.out.println("ncombos="+ncombos);
+        class AList {
+            int[] arr;
+            int sz;
+            AList(int n) {
+                arr=new int[n];
+                sz=0;
+            }
+            public int size() {
+                return sz;
+            }
+            int get(int i) {
+                if (0<=i&&i<sz) return arr[i];
+                else throw new RuntimeException("Index out of bounds.");
+            }
+            void add(int v) {
+                if (sz==arr.length) {
+                    int[] tmp=new int[2*arr.length];
+                    System.arraycopy(arr,0,tmp,0,arr.length);
+                    arr=tmp;
+                }
+                arr[sz++]=v;
+            }
+            int[] arr() {
+                return Arrays.copyOfRange(arr,0,sz);
+            }
+        }
+        List<AList> fronts=new ArrayList<>(); fronts.add(new AList(1));
         int solvedcode=comboCode(Arrays.copyOfRange(solvedscrm,0,K));
         fronts.get(0).add(solvedcode);
+        depth=new int[ncombos]; Arrays.fill(depth,Integer.MAX_VALUE); par=new int[ncombos]; blobi=new int[ncombos];
         depth[solvedcode]=0; par[solvedcode]=-1; blobi[solvedcode]=-1;
+        boolean[] visited=new boolean[ncombos];
         int reached=0;
         for (D=0, diam=0; D<fronts.size(); D++)
         if (fronts.get(D)!=null&&fronts.get(D).size()>0) {
-            diam=Math.max(diam,D);
-            System.out.println(D+":"+fronts.get(D).size());
-            reached+=fronts.get(D).size();
-            for (int f:fronts.get(D)) {
+            int fsz=0;
+            int[] front=fronts.get(D).arr();
+            for (int f:front) if (!visited[f]) {
+                fsz++;
+                visited[f]=true;
                 int[] scrm=codeCombo(f);
-                for (int ci = 0; ci< blobs.size(); ci++) if (blobactions.get(ci)!=null) {
+                for (int ci=0; ci<blobs.size(); ci++) if (blobactions.get(ci)!=null) {
                     int nf=comboCode(scrm,blobactions.get(ci));
-                    int ndepth=depth[f]+ blobs.get(ci).length();
+                    int ndepth=depth[f]+blobs.get(ci).length();
                     if (ndepth<depth[nf]) {
-                        if (depth[nf]!=Integer.MAX_VALUE)
-                            fronts.get(depth[nf]).remove(nf);
                         depth[nf]=ndepth;
                         par[nf]=f;
                         blobi[nf]=ci;
                         while (ndepth>=fronts.size()) fronts.add(null);
-                        if (fronts.get(ndepth)==null) fronts.set(ndepth,new HashSet<>());
+                        if (fronts.get(ndepth)==null) fronts.set(ndepth,new AList(1));
                         fronts.get(ndepth).add(nf);
                     }
                 }
             }
+            if (fsz>0) {
+                //System.out.print((D>0?" ":"")+D+":"+fsz);
+                diam=Math.max(diam,D);
+            }
+            reached+=fsz;
         }
-        System.out.println("# combos reached="+reached);
-        if (reached!=ncombos) System.out.println("Warning: ncombos="+ncombos+"!=reached="+reached+" (could be the result of parity restriction).");
+        /*System.out.println("# combos reached="+reached);
+        if (reached!=ncombos) System.out.println("Warning: ncombos="+ncombos+"!=reached="+reached+" (could be the result of parity restriction).");*/
         System.out.println("diameter="+diam);
         System.out.println("BFS time (ms)="+(System.currentTimeMillis()-st));
     }
@@ -231,10 +265,43 @@ public class LoopoverNRGCycleDijkstra {
     }
     public static void main(String[] args) {
         //4x4 NRG, JKL NOP already solved (takes at most 24 moves)
-        System.out.println(new LoopoverNRGCycleDijkstra(0,0,"0111,1111,1000,1000","0000,0000,0000,0000").test()); //solve BCD EFGH I M
-
-        //5x5 NRG, LMNO QRST VWXY already solved (takes at most 21+24+66=111 moves)
-        System.out.println(new LoopoverNRGCycleDijkstra(0,0,"01111,11111,10000,10000,10000","01111,01111,00000,00000,00000").test()); //solve F K P U
-        System.out.println(new LoopoverNRGCycleDijkstra(0,0,"01111,01111,00000,00000,00000","00000,00000,00000,00000,00000").test()); //solve BCDE GHIJ
+        boolean[][] start=tobmat("01111,11111,10000,10000,10000".split(",")),
+                end=tobmat("00000,00000,00000,00000,00000".split(","));
+        int N=5;
+        LoopoverNRGSetup[] bfss={LoopoverNRGSetup.cyc3bfs(N), LoopoverNRGSetup.swap22bfs(N)};
+        List<Integer> nlocs=new ArrayList<>();
+        for (int r=0; r<N; r++)
+            for (int c=0; c<N; c++)
+                if (start[r][c]&&!end[r][c]) nlocs.add(r*N+c);
+        System.out.println("locations to solve="+nlocs);
+        int M=8;
+        System.out.println("# of these locations to solve in 2nd phase="+M);
+        int[] bitcnt=new int[1<<nlocs.size()];
+        bitcnt[0]=0;
+        String bmid=null;
+        int bscr=Integer.MAX_VALUE;
+        for (int att=0; att<(1<<nlocs.size()); att++) {
+            if (att>0) bitcnt[att]=bitcnt[att>>>1]+(att&1);
+            if (bitcnt[att]==M) {
+                boolean[][] mid=new boolean[N][N];
+                for (int r=0; r<N; r++)
+                    mid[r]=start[r].clone();
+                for (int i=0; i<nlocs.size(); i++)
+                    mid[nlocs.get(i)/N][nlocs.get(i)%N]=((att>>i)&1)!=0;
+                int scr=new LoopoverNRGCycleDijkstra(0,0,start,mid,bfss).diam+new LoopoverNRGCycleDijkstra(0,0,mid,end,bfss).diam;
+                System.out.println(new StringBuilder(String.format("%"+nlocs.size()+"s",Integer.toBinaryString(att)).replaceAll(" ","0")).reverse()+"-->"+scr);
+                if (scr<bscr) {
+                    bscr=scr;
+                    StringBuilder t=new StringBuilder();
+                    for (int r=0; r<N; r++) {
+                        if (r>0) t.append(",");
+                        for (int c=0; c<N; c++)
+                            t.append(mid[r][c]?"1":"0");
+                    }
+                    bmid=t.toString();
+                }
+            }
+        }
+        System.out.println("best midstate: "+bmid+", scr="+bscr);
     }
 }
