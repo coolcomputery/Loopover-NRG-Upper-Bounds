@@ -334,6 +334,8 @@ public class LoopoverNRGSetup {
     public static LoopoverNRGSetup cyc3bfs(int N) {
         //3-cycle: pt 0 --> pt 1 --> pt 2 --> pt0
         List<String> algs=new ArrayList<>();
+        if (N>=4)
+            algs.add("RDLUURDLDLURDRULLDRUULDRDRULDLUR"); //32-move 3-cycle
         //below commutators found by brute-force search of all 3-cycles comm(A,B) for length-10 blobs A, B
         if (N==5)
             algs.addAll(Arrays.asList(
@@ -384,8 +386,9 @@ public class LoopoverNRGSetup {
                     comm("DLULDRUR","DRURDLUL"),
                     comm("URDRULDL","DLULDRUR")
             ));
+            if (N>=4)
+                algs.add("RUULURDLDRDLDRULUURULDRDLDRDLU"); //30-move 2,2-cycle
             if (N==5)
-                //does not reduce BFS diameter
                 algs.addAll(Arrays.asList(
                         comm("UULDRDLURD","LDLDRULURR"),
                         comm("LDLULDRURR","DRDRULDLUU"),
@@ -409,7 +412,6 @@ public class LoopoverNRGSetup {
                         comm("DRDRULDLUU","DLDLURDRUU")
                 ));
             else if (N==6)
-                //does not reduce BFS diameter
                 algs.addAll(Arrays.asList(
                         comm("DDLURULDRU","URUULDRDDL"),
                         comm("RURDRULDLL","RDLULLDRUR"),
@@ -498,8 +500,7 @@ public class LoopoverNRGSetup {
                         comm("RURDRULDLL","LULDLURDRR"),
                         comm("UURDLDRULD","RDDLDRUULU")
                 ));
-            else if (N>6)
-                //only reduces BFS diameter for N=7
+            else
                 algs.addAll(Arrays.asList(
                         comm("DDLURULDRU","URUULDRDDL"),
                         comm("RURDRULDLL","RDLULLDRUR"),
@@ -649,5 +650,10 @@ public class LoopoverNRGSetup {
         if (diam!=bfs.diam)
             System.out.println("!!!MISMATCH: verifier's observed diameter="+diam);
         System.out.println("verification time="+(System.currentTimeMillis()-st));
+    }
+    public static void main(String[] args) {
+        new LoopoverNRGUpper(4,0,0).SAupper("1100","1000",1000000,1);
+        new LoopoverNRGUpper(5,0,0).SAupper("11000","10000",100000,1);
+        new LoopoverNRGUpper(6,0,0).SAupper("110000","110000",10000,1);
     }
 }
