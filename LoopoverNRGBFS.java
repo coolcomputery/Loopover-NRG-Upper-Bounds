@@ -9,9 +9,31 @@ public class LoopoverNRGBFS {
             out[i]=s.charAt(i)=='1';
         return out;
     }
+    public static boolean[][] parse(String s) {
+        String[] rows=s.split(",");
+        if (rows.length>1) {
+            boolean[][] out=new boolean[rows.length][rows[0].length()];
+            for (int i=0; i<out.length; i++)
+                for (int j=0; j<rows[i].length(); j++) {
+                    char c=rows[i].charAt(j);
+                    if (c=='0') out[i][j]=false;
+                    else if (c=='1') out[i][j]=true;
+                    else throw new RuntimeException("Not parseable as a binary matrix.");
+                }
+            return out;
+        }
+        else {
+            String[] pcs=s.split("x");
+            if (pcs.length!=2) throw new RuntimeException("Not in 2 pieces: "+s);
+            return new boolean[][] {mask(pcs[0]),mask(pcs[1])};
+        }
+    }
     private int R, C;
     private int Nfree;
-    private boolean[] Rfree, Cfree;
+    private boolean[][] rcfree;
+    private boolean free(int r, int c) {
+        return rcfree[0][r]||rcfree[1][c];
+    }
     private int[] tofree, freeto;
     public int K;
     //BFS stuff
@@ -34,32 +56,39 @@ public class LoopoverNRGBFS {
     private int mvi(int code) {
         return data[code]==-1?-1:(int)((data[code]/ncombos)%M);
     }
-    public LoopoverNRGBFS(int R, int C, int gr, int gc, String rf0, String cf0, String rf1, String cf1, boolean strict) {
+    public LoopoverNRGBFS(int R, int C, int gr, int gc, String state0, String state1, boolean strict) {
         //RxC NRG Loopover, gripped piece at (gr,gc) when board is solved
+        //constraints: if A=# free rows at start state and B=#free clms at start state, then (A>=2&&B>=3)||(A>=3&&B>=2) must be satisfied
         //strict: all scrambles must be solved with gripped piece moved to where it should be in the solved board
         //nonstrict: gripped piece can be anywhere as long as all other pieces that need to be solved are solved
-        System.out.println(R+"x"+C+": ("+rf0+","+cf0+")-->("+rf1+","+cf1+") "+(strict?"strict":"nonstrict"));
-        long st=System.currentTimeMillis();
         this.R=R; this.C=C;
-        Rfree=mask(rf0); Cfree=mask(cf0);
-        if (!Rfree[gr]&&!Cfree[gc])
+        boolean[][] enstatemat=parse(state1);
+        if (state1.indexOf('x')!=-1) {
+            boolean[][] tmp=new boolean[R][C];
+            for (int i=0; i<R; i++)
+                for (int j=0; j<C; j++) tmp[i][j]=enstatemat[0][i]||enstatemat[1][j];
+            enstatemat=tmp;
+        }
+        System.out.println(R+"x"+C+": "+state0+" --> "+state1+" "+(strict?"strict":"nonstrict"));
+        long st=System.currentTimeMillis();
+        rcfree=parse(state0);
+        if (!free(gr,gc))
             throw new RuntimeException("Gripped piece is locked.");
         tofree=new int[R*C]; freeto=new int[R*C];
         Nfree=0;
         for (int r=0; r<R; r++)
             for (int c=0; c<C; c++)
-                if (Rfree[r]||Cfree[c]) {
+                if (free(r,c)) {
                     tofree[r*C+c]=Nfree;
                     freeto[Nfree]=r*C+c;
                     Nfree++;
                 }
                 else tofree[r*C+c]=-1;
-        boolean[] Rnfree=mask(rf1), Cnfree=mask(cf1);
         for (int r=0; r<R; r++) {
             for (int c=0; c<C; c++)
                 System.out.printf("%4s",
-                        Rfree[r]||Cfree[c]?
-                                ((r==gr&&c==gc?"*":(Rnfree[r]||Cnfree[c]?"":"'"))
+                        free(r,c)?
+                                ((r==gr&&c==gc?"*":(enstatemat[r][c]?"":"'"))
                                         +tofree[r*C+c])
                                 :"X"
                         //X: locked; ': piece that this BFS tree tries to solve; *: gripped piece
@@ -77,7 +106,7 @@ public class LoopoverNRGBFS {
                 mvactions[idx]=new int[Nfree];
                 for (int r=0; r<R; r++)
                     for (int c=0; c<C; c++)
-                        if (Rfree[r]||Cfree[c])
+                        if (free(r,c))
                             mvactions[idx][tofree[r*C+c]]=tofree[r*C+(r==mr?mod(c+s,C):c)];
                 idx++;
             }
@@ -88,7 +117,7 @@ public class LoopoverNRGBFS {
                 mvactions[idx]=new int[Nfree];
                 for (int r=0; r<R; r++)
                     for (int c=0; c<C; c++)
-                        if (Rfree[r]||Cfree[c])
+                        if (free(r,c))
                             mvactions[idx][tofree[r*C+c]]=tofree[(c==mc?mod(r+s,R):r)*C+c];
                 idx++;
             }
@@ -96,7 +125,7 @@ public class LoopoverNRGBFS {
         K=1; //include gripped piece
         for (int r=0; r<R; r++)
             for (int c=0; c<C; c++)
-                if ((Rfree[r]||Cfree[c])&&!(Rnfree[r]||Cnfree[c]))
+                if (free(r,c)&&!enstatemat[r][c])
                     K++;
         {
             long tmp=1;
@@ -112,12 +141,12 @@ public class LoopoverNRGBFS {
             List<Integer> solvedcodes=new ArrayList<>();
             for (int grow=0; grow<R; grow++)
             for (int gclm=0; gclm<C; gclm++)
-            if (strict?(grow==gr&&gclm==gc):(Rnfree[grow]&&Cnfree[gclm])) {
+            if (strict?(grow==gr&&gclm==gc):enstatemat[grow][gclm]) {
                 int[] solvedscrm=new int[K];
                 solvedscrm[0]=tofree[grow*C+gclm];
                 for (int r=0, idx=1; r<R; r++)
                     for (int c=0; c<C; c++)
-                        if ((Rfree[r]||Cfree[c])&&!(Rnfree[r]||Cnfree[c]))
+                        if (free(r,c)&&!enstatemat[r][c])
                             solvedscrm[idx++]=tofree[r*C+c];
                 System.out.println(Arrays.toString(solvedscrm));
                 int solvedscrmcode=comboCode(solvedscrm);
@@ -137,9 +166,9 @@ public class LoopoverNRGBFS {
             for (int f:fronts.get(D)) {
                 int[] scrm=codeCombo(f);
                 int mr=freeto[scrm[0]]/C, mc=freeto[scrm[0]]%C;
-                int[] mvlist=Rfree[mr]?
-                                (Cfree[mc]?new int[] {mr*2,mr*2+1,2*R+mc*2,2*R+mc*2+1}:new int[] {mr*2,mr*2+1}):
-                            Cfree[mc]?new int[] {2*R+mc*2,2*R+mc*2+1}:new int[] {};
+                int[] mvlist=rcfree[0][mr]?
+                                (rcfree[1][mc]?new int[] {mr*2,mr*2+1,2*R+mc*2,2*R+mc*2+1}:new int[] {mr*2,mr*2+1}):
+                        rcfree[1][mc]?new int[] {2*R+mc*2,2*R+mc*2+1}:new int[] {};
                 int invprevmv=D==0?-1:(mvi(f)^1);
                 for (int mi:mvlist)
                 if (mi!=invprevmv) {
@@ -233,10 +262,7 @@ public class LoopoverNRGBFS {
     }
     public static void main(String[] args) {
         long st=System.currentTimeMillis();
-        System.out.println(mvseqStr(new LoopoverNRGBFS(5,5,0,0,"11111","11111","11001","11001",true).solvemvs(new int[] {6,1,2,3,4})));
-        System.out.println("time="+(System.currentTimeMillis()-st));
-        st=System.currentTimeMillis();
-        System.out.println(mvseqStr(new LoopoverNRGBFS(5,5,0,0,"11111","11111","11001","11001",false).solvemvs(new int[] {6,1,2,3,4})));
+        System.out.println(mvseqStr(new LoopoverNRGBFS(4,4,0,0,"1111x1111","1100x1000",true).solvemvs(new int[] {6,5,4,3,2,1,0})));
         System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
