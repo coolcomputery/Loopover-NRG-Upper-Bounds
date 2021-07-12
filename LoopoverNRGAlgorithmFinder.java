@@ -6,7 +6,7 @@ public class LoopoverNRGAlgorithmFinder {
         return (n%k+k)%k;
     }
     private static int N, K;
-    private static long st, mark;
+    private static long st, mark0=10_000, mark, stage;
     private static int bscr;
     private static long ncalls, amt;
     private static int[] syllLens;
@@ -15,7 +15,8 @@ public class LoopoverNRGAlgorithmFinder {
     //WLOG assume the first syllable is horizontal
     private static void dfs(int idx, int tlen, int dr, int dc) {
         if (System.currentTimeMillis()-st>=mark) {
-            mark+=20_000;
+            stage++;
+            mark=(long)(mark0*Math.exp(Math.sqrt(stage)));
             System.out.printf("%10.3f%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,amt);
         }
         //tlen=current length of move sequence that syllLens[0:idx] represents
@@ -63,7 +64,8 @@ public class LoopoverNRGAlgorithmFinder {
         }
         for (int offset=1; offset<N; offset++) {
             int len=Math.min(offset,N-offset);
-            if (tlen+len<=K) {
+            //WLOG first syllable moves gripped piece to the right
+            if (tlen+len<=K&&(idx>0||offset<=N-offset)) {
                 syllLens[idx]=offset<=N-offset?len:(-len);
                 if (idx%2==0) { //horizontal syllable
                     rshift[dr]=mod(rshift[dr]+offset,N);
@@ -86,16 +88,16 @@ public class LoopoverNRGAlgorithmFinder {
         ncalls=0;
         LoopoverNRGAlgorithmFinder.K=K;
         rshift=new int[N]; cshift=new int[N];
-        mark=0;
+        mark=mark0;
+        stage =0;
         dfs(0,0,0,0);
         System.out.println("#dfs() calls="+ncalls);
         System.out.println("#strict blobs="+amt);
         System.out.println("bscr="+bscr);
     }
     public static void main(String[] args) {
-        //TODO: FIND <=32-MOVE 3-CYCLE
         N=5;
-        for (int L=28; L<=32; L++) {
+        for (int L=30; L<=32; L++) {
             System.out.println("L="+L);
             st=System.currentTimeMillis();
             blobs(L);
