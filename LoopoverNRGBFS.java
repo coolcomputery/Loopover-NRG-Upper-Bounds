@@ -148,7 +148,7 @@ public class LoopoverNRGBFS {
                     for (int c=0; c<C; c++)
                         if (free(r,c)&&!enstatemat[r][c])
                             solvedscrm[idx++]=tofree[r*C+c];
-                System.out.println(Arrays.toString(solvedscrm));
+                //System.out.println(Arrays.toString(solvedscrm));
                 int solvedscrmcode=comboCode(solvedscrm);
                 solvedcodes.add(solvedscrmcode);
                 data[solvedscrmcode]=0;
@@ -257,12 +257,25 @@ public class LoopoverNRGBFS {
     public static String mvseqStr(List<int[]> S) {
         StringBuilder str=new StringBuilder();
         for (int[] m:S)
-            str.append(" ").append(m[0]==0?"R":"C").append(m[1]).append(m[2]==1?"":m[2]==-1?"'":("("+m[2]+")"));
+            str.append(m[0]==0?(m[2]==1?"R":"L"):(m[2]==1?"D":"U"));
+            //str.append(" ").append(m[0]==0?"R":"C").append(m[1]).append(m[2]==1?"":m[2]==-1?"'":("("+m[2]+")"));
         return str.toString();
+    }
+    public String test() {
+        int[] tscrm=new int[K];
+        for (int i=0; i<K; i++) tscrm[i]=i;
+        for (int i=0; i+1<K-1-(i+1); i++) {
+            int tmp=tscrm[i]; tscrm[i]=tscrm[K-1-i]; tscrm[K-1-i]=tmp;
+            tmp=tscrm[i+1]; tscrm[i+1]=tscrm[K-1-(i+1)]; tscrm[K-1-(i+1)]=tmp;
+        }
+        System.out.println("tscrm="+Arrays.toString(tscrm));
+        return mvseqStr(solvemvs(tscrm));
     }
     public static void main(String[] args) {
         long st=System.currentTimeMillis();
-        System.out.println(mvseqStr(new LoopoverNRGBFS(4,4,0,0,"1111x1111","1100x1000",true).solvemvs(new int[] {6,5,4,3,2,1,0})));
+        String[] states={"11111x11111","11001x10011","11001x10001","11000x10000"};
+        for (int i=0; i<states.length-1; i++)
+            System.out.println(new LoopoverNRGBFS(5,5,0,0,states[i],states[i+1],false).test());
         System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
