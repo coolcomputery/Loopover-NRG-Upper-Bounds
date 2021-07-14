@@ -1,3 +1,4 @@
+import java.lang.reflect.Array;
 import java.util.*;
 /**
  * consider a NxN NRG Loopover board with a binary matrix A
@@ -49,7 +50,7 @@ public class LoopoverNRGDijkstra {
     public int ncombos;
     private int[] depth, par;
     private String[] step;
-    public int D, diam;
+    public int diam;
     public LoopoverNRGDijkstra(int gr, int gc, String A, String B) {
         this(gr,gc,tobmat(A.split(",")),tobmat(B.split(",")));
     }
@@ -62,7 +63,6 @@ public class LoopoverNRGDijkstra {
         if (R!=C) throw new RuntimeException("Only square board sizes allowed."); //need to refactor LoopoverNRGSetup before I can remove this constraint
         if (R!=B.length||C!=B[0].length) throw new RuntimeException("Mismatch in dimensions.");
         if (!A[gr][gc]) throw new RuntimeException("Gripped pieces locked at starting state.");
-        //TODO: DEAL WITH STRICT/NONSTRICT DIJKSTRA'S
         for (int r=0; r<R; r++) for (int c=0; c<C; c++)
             if (!A[r][c]&&B[r][c]) throw new RuntimeException("Set of solved pieces in A does not subset set of solved pieces in B.");
         F=0; tofree=new int[R*C]; freeto=new int[R*C];
@@ -138,7 +138,8 @@ public class LoopoverNRGDijkstra {
         boolean[] visited=new boolean[ncombos];
         int reached=0;
         if (bfss==null) bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3bfs(R), LoopoverNRGSetup.swap22bfs(R)};
-        for (D=0, diam=0; D<fronts.size(); D++)
+        diam=0;
+        for (int D=0; D<fronts.size(); D++)
         if (fronts.get(D)!=null&&fronts.get(D).size()>0) {
             int fsz=0;
             for (int f:fronts.get(D)) if (!visited[f]) {
@@ -162,20 +163,22 @@ public class LoopoverNRGDijkstra {
                 for (LoopoverNRGSetup bfs:bfss) if (bfs!=null) {
                     int nP=bfs.tP.length;
                     int[] tuple=new int[nP];
-                    //we want to cycle the pieces at locations freeto[scrm[tuple[i]+1]]
-                    while (tuple[nP-1]<K-1) {
+                    //we want to cycle the pieces at locations freeto[tuple[i]]
+                    while (tuple[nP-1]<F) {
                         boolean good=true;
-                        for (int i=0; i<nP; i++)
+                        for (int i=0; i<nP; i++) {
                             for (int j=0; j<i; j++)
                                 if (tuple[i]==tuple[j]) good=false;
+                            if (tuple[i]==scrm[0]) good=false;
+                        }
                         if (good) {
                             int[] L=new int[nP];
                             for (int i=0; i<nP; i++)
-                                L[i]=freeto[scrm[tuple[i]+1]];
-                            int[] nscrm=scrm.clone();
-                            for (int i=0; i<nP; i++)
-                                nscrm[tuple[i]+1]=scrm[tuple[bfs.tP[i]]+1];
-                            int nf=comboCode(nscrm);
+                                L[i]=freeto[tuple[i]];
+                            int[] action=new int[F];
+                            for (int i=0; i<F; i++) action[i]=i;
+                            for (int i=0; i<nP; i++) action[tofree[L[i]]]=tofree[L[bfs.tP[i]]];
+                            int nf=comboCode(scrm,action);
                             int ndepth=depth[f]+bfs.cost(L,lr,lc);
                             if (ndepth<depth[nf]) {
                                 depth[nf]=ndepth;
@@ -187,7 +190,7 @@ public class LoopoverNRGDijkstra {
                             }
                         }
                         tuple[0]++;
-                        for (int i=0; i<nP-1&&tuple[i]==K-1; i++) {
+                        for (int i=0; i<nP-1&&tuple[i]==F; i++) {
                             tuple[i]=0;
                             tuple[i+1]++;
                         }
@@ -259,26 +262,20 @@ public class LoopoverNRGDijkstra {
             out.append(inv(step[c])).append(" ");
         return out.toString();
     }
-    public String solveseq(int[] scramble) {
-        return solveseq(comboCode(scramble));
+    public String test() {
+        for (int code=0; code<ncombos; code++) if (depth[code]!=Integer.MAX_VALUE) {
+            System.out.println("tscrm="+Arrays.toString(codeCombo(code)));
+            return solveseq(code);
+        }
+        return null;
     }
     public static void main(String[] args) {
-        System.out.println(new LoopoverNRGDijkstra(0,0,"1010,1111,1010,1010,","0000,0000,0000,0000")
-                .solveseq(new int[] {9,8,7,6,5,4,3,2,1,0}));
-        //^^^ will solve the following scramble:
-        /*
-        O.M.
-        KIHG
-        F.E.
-        C.A.
-
-        (with all pieces shown):
-        OBMD
-        KIHG
-        FJEL
-        CNAP
-
-        output: RRURRURRDRRDRRURRURRDRRD RUURRUURRUURRUUR D D R DRDLLDDLLDDLLDDLLDLU RDRRURRURRDRRDRRURRURRDR R U
-         */
+        String[] states={
+                "11111,11111,10000,10000,10000",
+                "11011,11000,10000,10000,10000",
+                "00000,00000,00000,00000,00000",
+        };
+        for (int i=0; i<states.length-1; i++)
+            System.out.println(new LoopoverNRGDijkstra(0,0,states[i],states[i+1]).test());
     }
 }
