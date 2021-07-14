@@ -7,11 +7,12 @@ import java.util.*;
  * furthermore, we want to go from state A to state B
  *  where B is another matrix satisfying (!A[r][c]-->!B[r][c]) for all r,c
  *      i.e. if A[r][c]==false then B[r][c] must also be false
- * we will restrict ourselves to solving every scramble with 3-cycles and 2,2-cycles (more generally, blobs)
- * additionally, we never make any already solved pieces become unsolved, except when in the process of performing a blob
- *  i.e. after each blob, all (r,c) s.t. A[r][c]==true are still in their solved positions
+ * we will restrict ourselves to solving every scramble with 3-cycles, 2,2-cycles (more generally, blobs),
+ *      and single moves that by themselves do not move any already solved pieces
+ * we never make move any already solved pieces, except during the process of performing a blob
+ *  i.e. after each blob and each single move, all (r,c) s.t. A[r][c]==true are still in their solved positions
  */
-public class LoopoverNRGCycleDijkstra {
+public class LoopoverNRGDijkstra {
     private static int mod(int n, int k) {
         return (n%k+k)%k;
     }
@@ -41,170 +42,177 @@ public class LoopoverNRGCycleDijkstra {
         return out;
     }
     private int R, C;
-    private int Nfree;
-    private int[] tofree, freeto;
+    private int F; //F=number of locations that are not locked
+    private int[] tofree, freeto; //freeto[f]=l=location of the f-th unlocked location; tofree[l]=f
     public int K;
     //BFS stuff
     public int ncombos;
-    private int[] depth, par, blobi;
-    private List<String> blobs;
+    private int[] depth, par;
+    private String[] step;
     public int D, diam;
-    public LoopoverNRGCycleDijkstra(int gr, int gc, String A, String B) {
+    public LoopoverNRGDijkstra(int gr, int gc, String A, String B) {
         this(gr,gc,tobmat(A.split(",")),tobmat(B.split(",")));
     }
-    private LoopoverNRGCycleDijkstra(int gr, int gc, boolean[][] A, boolean[][] B) {
+    private LoopoverNRGDijkstra(int gr, int gc, boolean[][] A, boolean[][] B) {
         this(gr,gc,A,B,null);
     }
-    private LoopoverNRGCycleDijkstra(int gr, int gc, boolean[][] A, boolean[][] B, LoopoverNRGSetup[] bfss) {
+    private LoopoverNRGDijkstra(int gr, int gc, boolean[][] A, boolean[][] B, LoopoverNRGSetup[] bfss) {
         long st=System.currentTimeMillis();
         R=A.length; C=A[0].length;
         if (R!=C) throw new RuntimeException("Only square board sizes allowed."); //need to refactor LoopoverNRGSetup before I can remove this constraint
         if (R!=B.length||C!=B[0].length) throw new RuntimeException("Mismatch in dimensions.");
-        if (A[gr][gc]) throw new RuntimeException("Gripped piece not marked as solved.");
+        if (!A[gr][gc]) throw new RuntimeException("Gripped pieces locked at starting state.");
+        //TODO: DEAL WITH STRICT/NONSTRICT DIJKSTRA'S
         for (int r=0; r<R; r++) for (int c=0; c<C; c++)
             if (!A[r][c]&&B[r][c]) throw new RuntimeException("Set of solved pieces in A does not subset set of solved pieces in B.");
-        Nfree=0; tofree=new int[R*C]; freeto=new int[R*C];
+        F=0; tofree=new int[R*C]; freeto=new int[R*C];
         for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (A[r][c]) {
-            tofree[r*C+c]=Nfree;
-            freeto[Nfree]=r*C+c;
-            Nfree++;
+            tofree[r*C+c]=F;
+            freeto[F]=r*C+c;
+            F++;
         }
-        freeto=Arrays.copyOfRange(freeto,0,Nfree);
-        /*for (int r=0; r<R; r++) {
+        freeto=Arrays.copyOfRange(freeto,0,F);
+        for (int r=0; r<R; r++) {
             for (int c=0; c<C; c++)
                 System.out.printf("%4s",
-                        r==gr&&c==gc?"*":
-                                (A[r][c]?
-                                ((B[r][c]?"":"'"))+tofree[r*C+c]
-                                :"X")
-                        //X: locked; ': piece that this BFS tree tries to solve; *: gripped piece
+                                A[r][c]?
+                                ((B[r][c]?(r==gr&&c==gc?"g":""):(r==gr&&c==gc?"G":"'")))+tofree[r*C+c]
+                                :"X"
+                        //X: locked
+                        //': piece that this BFS tree tries to solve
+                        //g: gripped piece, does not have to go to home position
+                        //G: gripped piece, has to go to home position
                 );
             System.out.println();
-        }*/
-        blobs=new ArrayList<>(); List<int[]> blobactions=new ArrayList<>();
-        if (bfss==null) bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3bfs(R), LoopoverNRGSetup.swap22bfs(R)};
-        for (LoopoverNRGSetup bfs:bfss) if (bfs!=null) { //table of all possible 3-cycle algorithms we will need
-            int offset=blobs.size();
-            int T=bfs.tP.length; //the number of pieces that will be cycled
-            for (int rep=0; rep<Math.pow(Nfree,T); rep++) {
-                blobs.add(null);
-                blobactions.add(null);
-            }
-            int[] P=bfs.tP;
-            int[] tuple=new int[T];
-            while (tuple[T-1]<Nfree) {
-                boolean good=true;
-                for (int i=0; i<T&&good; i++)
-                    for (int j=0; j<i&&good; j++)
-                        if (tuple[i]==tuple[j]) good=false;
-                if (good) {
-                    int i=tupleCode(tuple);
-                    {
-                        int[] tl=new int[T]; for (int ii=0; ii<T; ii++) tl[ii]=freeto[tuple[ii]];
-                        blobs.set(offset+i,bfs.sol(tl,gr,gc));
-                    }
-                    int[] action=new int[Nfree];
-                    for (int k=0; k<Nfree; k++) action[k]=k;
-                    for (int p=0; p<T; p++)
-                        action[tuple[p]]=tuple[P[p]];
-                    //applying the move sequence bfs.sol(tl,gr,gc) moves the k-th free location to the action[k]-th free location
-                    blobactions.set(offset+i,action);
-                }
-                tuple[0]++;
-                for (int ti=0; ti<T-1&&tuple[ti]==Nfree; ti++) {
-                    tuple[ti]=0;
-                    tuple[ti+1]++;
-                }
-            }
         }
+        boolean[] rfree=new boolean[R], cfree=new boolean[C];
+        Arrays.fill(rfree,true); Arrays.fill(cfree,true);
+        for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (!A[r][c]) rfree[r]=cfree[c]=false;
+        int M=2*R+2*C;
+        int[][] mvactions=new int[M][]; {
+            //mvactions[m][i]=free loc. that i-th free loc. will go to after the m-th move is applied
+            //mv [0,mr,s] --> idx=mr*2+(s+1)/2
+            for (int mr=0; mr<R; mr++) if (rfree[mr])
+                for (int s=-1; s<=1; s+=2) {
+                    int idx=mr*2+(s+1)/2;
+                    mvactions[idx]=new int[F];
+                    for (int i=0; i<F; i++) {
+                        int r=freeto[i]/C, c=freeto[i]%C;
+                        mvactions[idx][i]=tofree[r*C+(r==mr?mod(c+s,C):c)];
+                    }
+                }
+            //mv [1,mc,s] --> idx=2*R+mc*2+(s+1)/2
+            for (int mc=0; mc<C; mc++) if (cfree[mc])
+                for (int s=-1; s<=1; s+=2) {
+                    int idx=2*R+mc*2+(s+1)/2;
+                    mvactions[idx]=new int[F];
+                    for (int i=0; i<F; i++) {
+                        int r=freeto[i]/C, c=freeto[i]%C;
+                        mvactions[idx][i]=tofree[(c==mc?mod(r+s,R):r)*C+c];
+                    }
+                }
+        }
+
         //BFS
-        K=0; int[] solvedscrm=new int[R*C];
-        for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (A[r][c]&&!B[r][c]) solvedscrm[K++]=tofree[r*C+c];
+        K=1;
+        for (int r=0; r<R; r++) for (int c=0; c<C; c++) if ((r!=gr||c!=gc)&&A[r][c]&&!B[r][c]) K++;
         long tmp=1;
         for (int rep=0; rep<K; rep++)
-            tmp*=Nfree-rep;
+            tmp*=F-rep;
         if (tmp>400_000_000) throw new RuntimeException("Too many combos: "+tmp);
         ncombos=(int)tmp;
-        //System.out.println("ncombos="+ncombos);
-        class AList {
-            int[] arr;
-            int sz;
-            AList(int n) {
-                arr=new int[n];
-                sz=0;
+        System.out.println("ncombos="+ncombos);
+        depth=new int[ncombos]; Arrays.fill(depth,Integer.MAX_VALUE); par=new int[ncombos]; step=new String[ncombos];
+        List<List<Integer>> fronts=new ArrayList<>(); fronts.add(new ArrayList<>());
+        for (int gl=0; gl<R*C; gl++)
+            if (B[gr][gc]?(B[gl/C][gl%C]):(gl==gr*C+gc)) {
+                int[] solvedscrm=new int[R*C]; solvedscrm[0]=tofree[gl];
+                for (int r=0, i=1; r<R; r++) for (int c=0; c<C; c++) if ((r!=gr||c!=gc)&&A[r][c]&&!B[r][c])
+                    solvedscrm[i++]=tofree[r*C+c];
+                solvedscrm=Arrays.copyOfRange(solvedscrm,0,K);
+                System.out.println(Arrays.toString(solvedscrm));
+                int solvedcode=comboCode(solvedscrm);
+                fronts.get(0).add(solvedcode);
+                depth[solvedcode]=0; par[solvedcode]=-1; step[solvedcode]=null;
             }
-            public int size() {
-                return sz;
-            }
-            int get(int i) {
-                if (0<=i&&i<sz) return arr[i];
-                else throw new RuntimeException("Index out of bounds.");
-            }
-            void add(int v) {
-                if (sz==arr.length) {
-                    int[] tmp=new int[2*arr.length];
-                    System.arraycopy(arr,0,tmp,0,arr.length);
-                    arr=tmp;
-                }
-                arr[sz++]=v;
-            }
-            int[] arr() {
-                return Arrays.copyOfRange(arr,0,sz);
-            }
-        }
-        List<AList> fronts=new ArrayList<>(); fronts.add(new AList(1));
-        int solvedcode=comboCode(Arrays.copyOfRange(solvedscrm,0,K));
-        fronts.get(0).add(solvedcode);
-        depth=new int[ncombos]; Arrays.fill(depth,Integer.MAX_VALUE); par=new int[ncombos]; blobi=new int[ncombos];
-        depth[solvedcode]=0; par[solvedcode]=-1; blobi[solvedcode]=-1;
         boolean[] visited=new boolean[ncombos];
         int reached=0;
+        if (bfss==null) bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3bfs(R), LoopoverNRGSetup.swap22bfs(R)};
         for (D=0, diam=0; D<fronts.size(); D++)
         if (fronts.get(D)!=null&&fronts.get(D).size()>0) {
             int fsz=0;
-            int[] front=fronts.get(D).arr();
-            for (int f:front) if (!visited[f]) {
+            for (int f:fronts.get(D)) if (!visited[f]) {
                 fsz++;
                 visited[f]=true;
                 int[] scrm=codeCombo(f);
-                for (int ci=0; ci<blobs.size(); ci++) if (blobactions.get(ci)!=null) {
-                    int nf=comboCode(scrm,blobactions.get(ci));
-                    int ndepth=depth[f]+blobs.get(ci).length();
+                int lr=freeto[scrm[0]]/C, lc=freeto[scrm[0]]%C;
+                int[] mvis={lr*2,lr*2+1,2*R+lc*2,2*R+lc*2+1};
+                for (int mvi:mvis) if (mvactions[mvi]!=null) {
+                    int nf=comboCode(scrm,mvactions[mvi]);
+                    int ndepth=depth[f]+1;
                     if (ndepth<depth[nf]) {
                         depth[nf]=ndepth;
                         par[nf]=f;
-                        blobi[nf]=ci;
+                        step[nf]=mvi<2*R?(mvi%2==0?"L":"R"):(mvi%2==0?"U":"D");
                         while (ndepth>=fronts.size()) fronts.add(null);
-                        if (fronts.get(ndepth)==null) fronts.set(ndepth,new AList(1));
+                        if (fronts.get(ndepth)==null) fronts.set(ndepth,new ArrayList<>());
                         fronts.get(ndepth).add(nf);
+                    }
+                }
+                for (LoopoverNRGSetup bfs:bfss) if (bfs!=null) {
+                    int nP=bfs.tP.length;
+                    int[] tuple=new int[nP];
+                    //we want to cycle the pieces at locations freeto[scrm[tuple[i]+1]]
+                    while (tuple[nP-1]<K-1) {
+                        boolean good=true;
+                        for (int i=0; i<nP; i++)
+                            for (int j=0; j<i; j++)
+                                if (tuple[i]==tuple[j]) good=false;
+                        if (good) {
+                            int[] L=new int[nP];
+                            for (int i=0; i<nP; i++)
+                                L[i]=freeto[scrm[tuple[i]+1]];
+                            int[] nscrm=scrm.clone();
+                            for (int i=0; i<nP; i++)
+                                nscrm[tuple[i]+1]=scrm[tuple[bfs.tP[i]]+1];
+                            int nf=comboCode(nscrm);
+                            int ndepth=depth[f]+bfs.cost(L,lr,lc);
+                            if (ndepth<depth[nf]) {
+                                depth[nf]=ndepth;
+                                par[nf]=f;
+                                step[nf]=bfs.sol(L,lr,lc);
+                                while (ndepth>=fronts.size()) fronts.add(null);
+                                if (fronts.get(ndepth)==null) fronts.set(ndepth,new ArrayList<>());
+                                fronts.get(ndepth).add(nf);
+                            }
+                        }
+                        tuple[0]++;
+                        for (int i=0; i<nP-1&&tuple[i]==K-1; i++) {
+                            tuple[i]=0;
+                            tuple[i+1]++;
+                        }
                     }
                 }
             }
             if (fsz>0) {
-                //System.out.print((D>0?" ":"")+D+":"+fsz);
+                System.out.println(D+":"+fsz);
                 diam=Math.max(diam,D);
             }
             reached+=fsz;
         }
-        /*System.out.println("# combos reached="+reached);
-        if (reached!=ncombos) System.out.println("Warning: ncombos="+ncombos+"!=reached="+reached+" (could be the result of parity restriction).");*/
+        System.out.println("# combos reached="+reached);
+        if (reached!=ncombos) System.out.println("Warning: ncombos="+ncombos+"!=reached="+reached+" (could be the result of parity restriction).");
         System.out.println("diameter="+diam);
         System.out.println("BFS time (ms)="+(System.currentTimeMillis()-st));
     }
-    private int tupleCode(int[] vs) {
-        int out=0;
-        for (int i=0, pow=1; i<vs.length; i++, pow*=Nfree)
-            out+=vs[i]*pow;
-        return out;
-    }
     private int comboCode(int[] A) {
-        int[] P=new int[Nfree];
-        for (int i=0; i<Nfree; i++) P[i]=i;
+        int[] P=new int[F];
+        for (int i=0; i<F; i++) P[i]=i;
         int[] L=P.clone();
         int out=0;
-        for (int i=Nfree-1, pow=1; i>=Nfree-K; i--) {
+        for (int i=F-1, pow=1; i>=F-K; i--) {
             //swap idxs i and L[A[i-(N-K)]] in P
-            int j=L[A[i-(Nfree-K)]];
+            int j=L[A[i-(F-K)]];
             int pi=P[i];//, pj=P[j];
             //P[i]=pj; //<--idx i will never be touched again
             P[j]=pi;
@@ -217,12 +225,12 @@ public class LoopoverNRGCycleDijkstra {
         return out;
     }
     private int comboCode(int[] A, int[] f) {
-        int[] P=new int[Nfree];
-        for (int i=0; i<Nfree; i++) P[i]=i;
+        int[] P=new int[F];
+        for (int i=0; i<F; i++) P[i]=i;
         int[] L=P.clone();
         int out=0;
-        for (int i=Nfree-1, pow=1; i>=Nfree-K; i--) {
-            int j=L[f[A[i-(Nfree-K)]]];
+        for (int i=F-1, pow=1; i>=F-K; i--) {
+            int j=L[f[A[i-(F-K)]]];
             int pi=P[i];
             P[j]=pi;
             L[pi]=j;
@@ -232,15 +240,15 @@ public class LoopoverNRGCycleDijkstra {
         return out;
     }
     private int[] codeCombo(int code) {
-        int[] P=new int[Nfree];
-        for (int i=0; i<Nfree; i++) P[i]=i;
-        for (int v=Nfree; v>Nfree-K; v--) {
+        int[] P=new int[F];
+        for (int i=0; i<F; i++) P[i]=i;
+        for (int v=F; v>F-K; v--) {
             int i=v-1, j=code%v;
             code/=v;
             int pi=P[i]; P[i]=P[j]; P[j]=pi;
         }
         int[] out=new int[K];
-        System.arraycopy(P,Nfree-K,out,0,K);
+        System.arraycopy(P,F-K,out,0,K);
         return out;
     }
     public String solveseq(int code) {
@@ -248,60 +256,29 @@ public class LoopoverNRGCycleDijkstra {
             throw new RuntimeException("No solution.");
         StringBuilder out=new StringBuilder();
         for (int c=code; depth[c]>0; c=par[c])
-            out.append(inv(blobs.get(blobi[c]))).append(" ");
+            out.append(inv(step[c])).append(" ");
         return out.toString();
     }
     public String solveseq(int[] scramble) {
         return solveseq(comboCode(scramble));
     }
-    private String test() {
-        int[] tscrm=new int[K];
-        for (int i=0; i<K; i++) tscrm[i]=(i+1)%K;
-        if (K%2==0) {
-            int tmp=tscrm[0]; tscrm[0]=tscrm[1]; tscrm[1]=tmp;
-        }
-        System.out.println("test array: "+Arrays.toString(tscrm));
-        return solveseq(tscrm);
-    }
     public static void main(String[] args) {
-        //4x4 NRG, JKL NOP already solved (takes at most 24 moves)
-        boolean[][] start=tobmat("01111,11111,10000,10000,10000".split(",")),
-                end=tobmat("00000,00000,00000,00000,00000".split(","));
-        int N=5;
-        LoopoverNRGSetup[] bfss={LoopoverNRGSetup.cyc3bfs(N), LoopoverNRGSetup.swap22bfs(N)};
-        List<Integer> nlocs=new ArrayList<>();
-        for (int r=0; r<N; r++)
-            for (int c=0; c<N; c++)
-                if (start[r][c]&&!end[r][c]) nlocs.add(r*N+c);
-        System.out.println("locations to solve="+nlocs);
-        int M=8;
-        System.out.println("# of these locations to solve in 2nd phase="+M);
-        int[] bitcnt=new int[1<<nlocs.size()];
-        bitcnt[0]=0;
-        String bmid=null;
-        int bscr=Integer.MAX_VALUE;
-        for (int att=0; att<(1<<nlocs.size()); att++) {
-            if (att>0) bitcnt[att]=bitcnt[att>>>1]+(att&1);
-            if (bitcnt[att]==M) {
-                boolean[][] mid=new boolean[N][N];
-                for (int r=0; r<N; r++)
-                    mid[r]=start[r].clone();
-                for (int i=0; i<nlocs.size(); i++)
-                    mid[nlocs.get(i)/N][nlocs.get(i)%N]=((att>>i)&1)!=0;
-                int scr=new LoopoverNRGCycleDijkstra(0,0,start,mid,bfss).diam+new LoopoverNRGCycleDijkstra(0,0,mid,end,bfss).diam;
-                System.out.println(new StringBuilder(String.format("%"+nlocs.size()+"s",Integer.toBinaryString(att)).replaceAll(" ","0")).reverse()+"-->"+scr);
-                if (scr<bscr) {
-                    bscr=scr;
-                    StringBuilder t=new StringBuilder();
-                    for (int r=0; r<N; r++) {
-                        if (r>0) t.append(",");
-                        for (int c=0; c<N; c++)
-                            t.append(mid[r][c]?"1":"0");
-                    }
-                    bmid=t.toString();
-                }
-            }
-        }
-        System.out.println("best midstate: "+bmid+", scr="+bscr);
+        System.out.println(new LoopoverNRGDijkstra(0,0,"1010,1111,1010,1010,","0000,0000,0000,0000")
+                .solveseq(new int[] {9,8,7,6,5,4,3,2,1,0}));
+        //^^^ will solve the following scramble:
+        /*
+        O.M.
+        KIHG
+        F.E.
+        C.A.
+
+        (with all pieces shown):
+        OBMD
+        KIHG
+        FJEL
+        CNAP
+
+        output: RRURRURRDRRDRRURRURRDRRD RUURRUURRUURRUUR D D R DRDLLDDLLDDLLDDLLDLU RDRRURRURRDRRDRRURRURRDR R U
+         */
     }
 }
