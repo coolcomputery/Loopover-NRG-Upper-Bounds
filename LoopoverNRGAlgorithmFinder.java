@@ -88,7 +88,7 @@ public class LoopoverNRGAlgorithmFinder {
         System.out.println("#dfs() calls="+ncalls);
         System.out.println("#strict blobs with score 4="+results.get(4).size());
     }
-    private static List<TreeSet<String>> primaryAlgs(int N, Collection<String> algs) {
+    public static List<TreeSet<String>> primaryAlgs(int N, Collection<String> algs) {
         TreeSet<String> primaryAlgs=new TreeSet<>(algcomp), seen=new TreeSet<>(algcomp);
         for (String alg:algs) {
             String red=LoopoverNRGSetup.canonical(N,alg);
