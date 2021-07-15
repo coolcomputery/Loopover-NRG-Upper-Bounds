@@ -7,17 +7,16 @@ public class LoopoverNRGAlgorithmFinder {
     }
     private static int N, K;
     private static long st, mark0=10_000, mark, stage;
-    private static int bscr;
-    private static long ncalls, amt;
+    private static long ncalls;
     private static int[] syllLens;
     private static int[] rshift, cshift;
-    private static Map<String,int[][]> results;
+    private static Map<Integer,Map<String,int[][]>> results;
     //WLOG assume the first syllable is horizontal
     private static void dfs(int idx, int tlen, int dr, int dc) {
         if (System.currentTimeMillis()-st>=mark) {
             stage++;
             mark=(long)(mark0*Math.exp(Math.sqrt(stage)));
-            System.out.printf("%10.3f%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,amt);
+            System.out.printf("%10.3f%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,results.get(4).size());
         }
         //tlen=current length of move sequence that syllLens[0:idx] represents
         ncalls++;
@@ -48,16 +47,9 @@ public class LoopoverNRGAlgorithmFinder {
                     String alg=tmp.toString();
                     int[][] ret=LoopoverNRGSetup.effect(N,alg);
                     int scr=ret[0].length;
-                    if (scr<=bscr&&scr>0) {
-                        if (scr<bscr) {
-                            bscr=scr;
-                            results.clear();
-                        }
-                        results.put(alg,ret);
+                    if (results.containsKey(scr)) {
+                        results.get(scr).put(alg,ret);
                     }
-                    amt++;
-                    if (amt%10_000_000==0)
-                        System.out.println("#checked="+amt+", time="+(System.currentTimeMillis()-st));
                 }
             }
             return;
@@ -81,9 +73,8 @@ public class LoopoverNRGAlgorithmFinder {
         }
     }
     private static void blobs(int K) {
-        amt=0;
-        bscr=Integer.MAX_VALUE;
         results=new HashMap<>();
+        results.put(4,new HashMap<>());
         syllLens=new int[K];
         ncalls=0;
         LoopoverNRGAlgorithmFinder.K=K;
@@ -92,31 +83,53 @@ public class LoopoverNRGAlgorithmFinder {
         stage =0;
         dfs(0,0,0,0);
         System.out.println("#dfs() calls="+ncalls);
-        System.out.println("#strict blobs="+amt);
-        System.out.println("bscr="+bscr);
+        System.out.println("#strict blobs with score 4="+results.get(4).size());
+    }
+    private static List<String> primaryAlgs(int N, Collection<String> algs) {
+        List<String> primaryAlgs=new ArrayList<>();
+        Set<String> seen=new HashSet<>();
+        for (String alg:algs) {
+            String red=LoopoverNRGSetup.reduced(N,alg);
+            if (!seen.contains(red)) {
+                primaryAlgs.add(red);
+                for (int i=0; i<red.length(); i++) {
+                    StringBuilder s=new StringBuilder();
+                    //count rotated/reflected/inverted versions of an algorithm to be equivalent
+                    for (int k=0; k<red.length(); k++)
+                        s.append(red.charAt((k+i)%red.length()));
+                    for (int b=0; b<16; b++)
+                        seen.add(LoopoverNRGSetup.reduced(N,LoopoverNRGSetup.transformed(s.toString(),b)));
+                }
+            }
+        }
+        primaryAlgs.sort(new Comparator<String>() {
+            @Override
+            public int compare(String o1, String o2) {
+                return o1.length()==o2.length()?o1.compareTo(o2):o1.length()-o2.length();
+            }
+        });
+        return primaryAlgs;
+    }
+    private static String inv(String mvs) {
+        StringBuilder out=new StringBuilder();
+        for (int i=mvs.length()-1; i>-1; i--) {
+            char c=mvs.charAt(i);
+            out.append(c=='D'?'U':c=='R'?'L':c=='U'?'D':'R');
+        }
+        return out.toString();
+    }
+    public static String comm(String A, String B) {
+        return A+B+inv(A)+inv(B);
     }
     public static void main(String[] args) {
         N=5;
-        for (int L=30; L<=32; L++) {
+        for (int L=32; L<=32; L++) {
             System.out.println("L="+L);
             st=System.currentTimeMillis();
             blobs(L);
-            Set<String> primaryAlgs=new HashSet<>(), seen=new HashSet<>();
-            for (String alg:results.keySet()) {
-                String red=LoopoverNRGSetup.reduced(N,alg);
-                if (!seen.contains(red)) {
-                    primaryAlgs.add(red);
-                    for (int i=0; i<red.length(); i++) {
-                        StringBuilder s=new StringBuilder();
-                        //count rotated/reflected/inverted versions of an algorithm to be equivalent
-                        for (int k=0; k<red.length(); k++)
-                            s.append(red.charAt((k+i)%red.length()));
-                        for (int b=0; b<16; b++)
-                            seen.add(LoopoverNRGSetup.reduced(N,LoopoverNRGSetup.transformed(s.toString(),b)));
-                    }
-                }
-            }
-            System.out.println(primaryAlgs);
+            List<String> algs=primaryAlgs(N,results.get(4).keySet());
+            System.out.println(algs);
+            System.out.println("num="+algs.size());
             System.out.println("time="+(System.currentTimeMillis()-st));
         }
     }
