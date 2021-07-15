@@ -141,7 +141,7 @@ public class LoopoverNRGSetup {
             P[i]=toMovedLocs[perm[L[i]]];
         return new int[][] {L,P};
     }
-    public static String reduced(int N, String alg) {
+    public static String canonical(int N, String alg) {
         //remove redundant moves from alg
         StringBuilder str=new StringBuilder();
         for (int i=0; i<alg.length(); i++)
@@ -171,7 +171,7 @@ public class LoopoverNRGSetup {
 
     //start of BFS part
     private int N, V, K;
-    private int[] tP;
+    public int[] tP;
     private int[] par, cost;
     private String[] algs;
     private List<List<int[]>> ptsetss;
@@ -194,12 +194,12 @@ public class LoopoverNRGSetup {
         this.tP=tP;
         {
             Set<String> tmp=new HashSet<>();
-            //include inverses and all dihedral symmatries of the initial algorithms
+            //include inverses, reflections, and move sequence rotations of the initial algorithms
             for (String alg_init:algs_init) {
-                String red=reduced(N,alg_init);
+                String red=canonical(N,alg_init);
                 //every rotated version of a X-cycle is another X-cycle
                 //to see why, let a X-cycle algorithm consist of moves M=[M[0]...M[L-1]]
-                //then a rotated version M[a]...M[L-1] M[0]...M[a-1] can be written as S M S^-1,
+                //then any rotated version M[a]...M[L-1] M[0]...M[a-1] can be written as S M S^-1,
                 //where S=inv([M[0]...M[a-1]])
                 //i.e. every rotated version of M is M combined with some setup moves
                 //System.out.println(alg_init+"-->"+red);
@@ -207,10 +207,13 @@ public class LoopoverNRGSetup {
                     StringBuilder s=new StringBuilder();
                     for (int k=0; k<red.length(); k++)
                         s.append(red.charAt((k+i)%red.length()));
-                    for (int b=0; b<16; b++)
-                        tmp.add(transformed(s.toString(),b));
+                    for (int b=0; b<16; b++) {
+                        String ret=canonical(N,transformed(s.toString(),b));
+                        tmp.add(ret);
+                    }
                 }
             }
+            System.out.println("# algs after rotations/inverses/reflections="+tmp.size());
             this.algs=new String[tmp.size()];
             int i=0;
             for (String s:tmp) algs[i++]=s;
@@ -223,6 +226,7 @@ public class LoopoverNRGSetup {
             int[] L=effect[0], P=effect[1];
             if (K!=L.length)
                 throw new RuntimeException("Mismatch in # changed pieces: "+Arrays.toString(L)+".length!="+K);
+            //(L,P) describes the permutation action "location L[i] --> location L[P[i]] for all i"
             //convert L to L' s.t. (L,P) and (L',tP) describe equivalent permutation actions
             //find all Q s.t. "L[i]-->L[P[i]] for all i" == "L[Q[i]]-->L[Q[tP[i]] for all i"
             //--> find all Q s.t. "i-->P[i]" == "Q[i]-->Q[tP[i]]"
@@ -273,7 +277,7 @@ public class LoopoverNRGSetup {
         long reached=0;
         for (int co=0; co<tuplesAtCost.size(); co++) //Dijkstra's algorithm
         if (tuplesAtCost.get(co).size()>0) {
-            //System.out.println(co+":"+tuplesAtCost.get(co).size());
+            System.out.println(co+":"+tuplesAtCost.get(co).size());
             reached+=tuplesAtCost.get(co).size();
             diam=Math.max(diam,co);
             for (int f:tuplesAtCost.get(co)) {
@@ -314,21 +318,34 @@ public class LoopoverNRGSetup {
     //end of BFS part
 
     //L[] is an array of locations on the board
-    public String[] actionsol(int[] L, int lr, int lc) {
+    public int tupleCode(int[] L, int lr, int lc) {
         if (L.length!=K) throw new RuntimeException("Mismatch in number of pieces: "+L.length+"!="+K);
         int[] nL=new int[K];
         for (int i=0; i<K; i++) nL[i]=mod(L[i]/N-lr,N)*N+mod(L[i]%N-lc,N);
-        int v=code(nL);
+        return code(nL);
+    }
+    public int cost(int v) {
+        return cost[v];
+    }
+    public int cost(int[] L, int lr, int lc) {
+        return cost[tupleCode(L,lr,lc)];
+    }
+    public String[] actionsol(int v) {
+        if (cost[v]==Integer.MAX_VALUE) throw new RuntimeException("Invalid tuple of locations.");
         StringBuilder out=new StringBuilder();
         for (; par[v]>-1; v=par[v]/4)
             out.append(dirNames[par[v]%4]);
         return new String[] {out.toString(),algs[-1-par[v]]};
     }
-    public int cost(int[] L, int lr, int lc) {
-        if (L.length!=K) throw new RuntimeException("Mismatch in number of pieces: "+L.length+"!="+K);
-        int[] nL=new int[K];
-        for (int i=0; i<K; i++) nL[i]=mod(L[i]/N-lr,N)*N+mod(L[i]%N-lc,N);
-        return cost[code(nL)];
+    public String[] actionsol(int[] L, int lr, int lc) {
+        return actionsol(tupleCode(L,lr,lc));
+    }
+    public String sol(int v) {
+        String[] t=actionsol(v);
+        return t[0]+t[1]+inv(t[0]);
+    }
+    public String sol(int[] L, int lr, int lc) {
+        return sol(tupleCode(L,lr,lc));
     }
     //a "blob" is a move sequence that leads to no net displacement in the gripped piece
     public static LoopoverNRGSetup cyc3bfs(int N) {
@@ -376,18 +393,13 @@ public class LoopoverNRGSetup {
     public static LoopoverNRGSetup swap22bfs(int N) {
         //double swapper: pt 0 <--> pt 1, pt 2 <--> pt 3
         if (N>=5) {
-            //below commutators found by brute-force search of all 3-cycles comm(A,B) for length-8 blobs A, B and length-10 blobs A, B
-            List<String> algs=new ArrayList<>(Arrays.asList(
-                    //remove consecutive inverse moves from these algorithms
-                    comm("ULURDLDR","DRDLURUL"),
-                    comm("URULDRDL","DRDLURUL"),
-                    comm("RDLDRULU","URULDRDL"),
-                    comm("URDRULDL","LDLURDRU"),
-                    comm("DLULDRUR","DRURDLUL"),
-                    comm("URDRULDL","DLULDRUR")
-            ));
-            if (N>=4)
-                algs.add("RUULURDLDRDLDRULUURULDRDLDRDLU"); //30-move 2,2-cycle
+            //below commutators found by brute-force search of all 2,2-cycle strict blobs
+            List<String> algs=Arrays.asList(
+                    "DDLDRULURULURDLDDRDLURULURULDR",
+                    "DDLDLURDRUURDLDLUULDRDRUURULDLUR",
+                    "DDLDRULURURULDRDLLDRDLURURULURDL",
+                    "DLDLDRURULULDRDLURDRULDRDLULURUR"
+            );
             if (N==5)
                 algs.addAll(Arrays.asList(
                         comm("UULDRDLURD","LDLDRULURR"),
@@ -652,8 +664,46 @@ public class LoopoverNRGSetup {
         System.out.println("verification time="+(System.currentTimeMillis()-st));
     }
     public static void main(String[] args) {
-        new LoopoverNRGUpper(4,0,0).SAupper("1100","1000",1000000,1);
-        new LoopoverNRGUpper(5,0,0).SAupper("11000","10000",100000,1);
-        new LoopoverNRGUpper(6,0,0).SAupper("110000","110000",10000,1);
+        int[] P={1,0,3,2};
+        List<String> comms=Arrays.asList(
+                "DDLDRULURULURDLDDRDLURULURULDR",
+                "DDLDLURDRUURDLDLUULDRDRUURULDLUR",
+                "DDLDRULURURULDRDLLDRDLURURULURDL",
+                "DLDLDRURULULDRDLURDRULDRDLULURUR",
+                comm("UULDRDLURD","LDLDRULURR"),
+                comm("LDLULDRURR","DRDRULDLUU"),
+                comm("LDLDRULURR","RURULDRDLL"),
+                comm("RRULURDLDL","DRDLDRULUU"),
+                comm("LLURDRULDR","UURDRULDLD"),
+                comm("LDRULDLURR","RDLURDRULL"),
+                comm("LDRULDLURR","DRDRULDLUU"),
+                comm("RRDRULDLUL","DLDLURDRUU"),
+                comm("LLDRDLURUR","UULURDLDRD"),
+                comm("LLURULDRDR","LLDRDLURUR"),
+                comm("UURDLDRULD","DDRULURDLU"),
+                comm("RRDLDRULUL","LLURULDRDR"),
+                comm("DDLURULDRU","UURDLDRULD"),
+                comm("DDRURDLULU","LDRULDLURR"),
+                comm("DDLULDRURU","DRDRULDLUU"),
+                comm("LURDLULDRR","RDLURDRULL"),
+                comm("UULDLURDRD","DRDRULDLUU"),
+                comm("UULDRDLURD","DRULDRDLUU"),
+                comm("RRDLULDRUL","LDRULDLURR"),
+                comm("DRDRULDLUU","DLDLURDRUU")
+        );
+        LoopoverNRGSetup[] bfss={
+                new LoopoverNRGSetup(5,comms,P),
+                new LoopoverNRGSetup(5,LoopoverNRGAlgorithmFinder.primaryAlgs(5,comms).get(0),P)
+        }; //both elements in bfss[] should have the exact same behavior, but they don't
+        for (int code=0; code<bfss[0].cost.length; code++) {
+            int[] costs=new int[bfss.length];
+            for (int i=0; i<bfss.length; i++) costs[i]=bfss[i].cost[code];
+            if (costs[0]!=costs[1]) {
+                for (LoopoverNRGSetup bfs:bfss)
+                    System.out.println(Arrays.toString(bfs.actionsol(code)));
+                throw new RuntimeException("Mismatch: tuple="+Arrays.toString(bfss[0].decode(code))
+                        +" costs="+Arrays.toString(costs));
+            }
+        }
     }
 }
