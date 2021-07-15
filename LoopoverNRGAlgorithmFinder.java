@@ -88,11 +88,10 @@ public class LoopoverNRGAlgorithmFinder {
         System.out.println("#dfs() calls="+ncalls);
         System.out.println("#strict blobs with score 4="+results.get(4).size());
     }
-    private static Set<String> primaryAlgs(int N, Collection<String> algs) {
-        TreeSet<String> primaryAlgs=new TreeSet<>(algcomp);
-        Set<String> seen=new HashSet<>();
+    private static List<TreeSet<String>> primaryAlgs(int N, Collection<String> algs) {
+        TreeSet<String> primaryAlgs=new TreeSet<>(algcomp), seen=new TreeSet<>(algcomp);
         for (String alg:algs) {
-            String red=LoopoverNRGSetup.reduced(N,alg);
+            String red=LoopoverNRGSetup.canonical(N,alg);
             if (!seen.contains(red)) {
                 TreeSet<String> group=new TreeSet<>(algcomp);
                 for (int i=0; i<red.length(); i++) {
@@ -101,16 +100,19 @@ public class LoopoverNRGAlgorithmFinder {
                     for (int k=0; k<red.length(); k++)
                         s.append(red.charAt((k+i)%red.length()));
                     for (int b=0; b<16; b++)
-                        group.add(LoopoverNRGSetup.reduced(N,LoopoverNRGSetup.transformed(s.toString(),b)));
+                        group.add(LoopoverNRGSetup.canonical(N,LoopoverNRGSetup.transformed(s.toString(),b)));
                 }
                 primaryAlgs.add(group.first());
                 seen.addAll(group);
             }
         }
-        return primaryAlgs;
+        System.out.println("total # algs incl symmetries="+seen.size());
+        List<TreeSet<String>> out=new ArrayList<>();
+        out.add(primaryAlgs); out.add(seen);
+        return out;
     }
     public static void main(String[] args) {
-        N=5;
+        /*N=5;
         for (int L=32; L<=32; L++) {
             System.out.println("L="+L);
             st=System.currentTimeMillis();
@@ -119,6 +121,50 @@ public class LoopoverNRGAlgorithmFinder {
             System.out.println(algs);
             System.out.println("num="+algs.size());
             System.out.println("time="+(System.currentTimeMillis()-st));
+        }*/
+        //WARNING:
+        //it is sometimes possible for transformations of algorithms to be irreversible
+        //ex. rotating LLDDLDRULURULURDLDDRDLURULURULDLL 2 units left yields DDLDRULURULURDLDDRDLURULURULDLLLL,
+        //  which reduces to DDLDRULURULURDLDDRDLURULURULDR under the current algorithm
+        //  then it is not possible to only use rotations, reflections, and inversions, to reverse this process
+        List<TreeSet<String>> ret=primaryAlgs(5,Arrays.asList(
+                "DDLDRULURULURDLDDRDLURULURULDR",
+                "DDLDLURDRUURDLDLUULDRDRUURULDLUR",
+                "DDLDRULURURULDRDLLDRDLURURULURDL",
+                "DLDLDRURULULDRDLURDRULDRDLULURUR",
+                comm("UULDRDLURD","LDLDRULURR"),
+                comm("LDLULDRURR","DRDRULDLUU"),
+                comm("LDLDRULURR","RURULDRDLL"),
+                comm("RRULURDLDL","DRDLDRULUU"),
+                comm("LLURDRULDR","UURDRULDLD"),
+                comm("LDRULDLURR","RDLURDRULL"),
+                comm("LDRULDLURR","DRDRULDLUU"),
+                comm("RRDRULDLUL","DLDLURDRUU"),
+                comm("LLDRDLURUR","UULURDLDRD"),
+                comm("LLURULDRDR","LLDRDLURUR"),
+                comm("UURDLDRULD","DDRULURDLU"),
+                comm("RRDLDRULUL","LLURULDRDR"),
+                comm("DDLURULDRU","UURDLDRULD"),
+                comm("DDRURDLULU","LDRULDLURR"),
+                comm("DDLULDRURU","DRDRULDLUU"),
+                comm("LURDLULDRR","RDLURDRULL"),
+                comm("UULDLURDRD","DRDRULDLUU"),
+                comm("UULDRDLURD","DRULDRDLUU"),
+                comm("RRDLULDRUL","LDRULDLURR"),
+                comm("DRDRULDLUU","DLDLURDRUU")
+        )), ret2=primaryAlgs(5,ret.get(0));
+        for (String s:ret.get(1)) if (!ret2.get(1).contains(s))
+            System.out.println(s);
+    }
+    private static String inv(String mvs) {
+        StringBuilder out=new StringBuilder();
+        for (int i=mvs.length()-1; i>-1; i--) {
+            char c=mvs.charAt(i);
+            out.append(c=='D'?'U':c=='R'?'L':c=='U'?'D':'R');
         }
+        return out.toString();
+    }
+    public static String comm(String A, String B) {
+        return A+B+inv(A)+inv(B);
     }
 }
