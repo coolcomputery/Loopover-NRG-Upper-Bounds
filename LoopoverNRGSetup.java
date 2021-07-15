@@ -172,8 +172,7 @@ public class LoopoverNRGSetup {
     //start of BFS part
     private int N, V, K;
     public int[] tP;
-    private int[] par, cost;
-    private String[] algs;
+    private String[] algs, sols;
     private List<List<int[]>> ptsetss;
     public int diam;
     private int code(int[] vs) {
@@ -202,6 +201,8 @@ public class LoopoverNRGSetup {
                 //then any rotated version M[a]...M[L-1] M[0]...M[a-1] can be written as S M S^-1,
                 //where S=inv([M[0]...M[a-1]])
                 //i.e. every rotated version of M is M combined with some setup moves
+                //we make these rotated versions of these algorithms ahead of time in order to avoid
+                //  a ConcurrentModificationException later on (i.e. we avoid traversing 0-length edges in our graph)
                 //System.out.println(alg_init+"-->"+red);
                 for (int i=0; i<red.length(); i++) {
                     StringBuilder s=new StringBuilder();
@@ -251,23 +252,17 @@ public class LoopoverNRGSetup {
     private void bfs() {
         long sttime=System.currentTimeMillis();
         int AMT=1; for (int rep=0; rep<K; rep++) AMT*=V;
-        par=new int[AMT];
-        cost=new int[AMT];
-        Arrays.fill(cost,Integer.MAX_VALUE);
-        //par[v]=p
-        //v=code(L) for some tuple L
-        //if p>=0, then p=code(L_p), where L_p is the parent tuple of L in the BFS
-        //else, p=-1-i, where tuple L is directly solved by algorithm algs[i]
+        sols=new String[AMT];
         List<Set<Integer>> tuplesAtCost=new ArrayList<>();
         for (int ai=0; ai<algs.length; ai++) {
-            int c=algs[ai].length();
+            String alg=algs[ai];
+            int c=alg.length();
             for (int[] ptset:ptsetss.get(ai)) {
                 int code=code(ptset);
-                if (c<cost[code]) {
-                    if (cost[code]!=Integer.MAX_VALUE)
-                        tuplesAtCost.get(cost[code]).remove(code);
-                    par[code]=-1-ai;
-                    cost[code]=c;
+                if (sols[code]==null||c<sols[code].length()) {
+                    if (sols[code]!=null)
+                        tuplesAtCost.get(sols[code].length()).remove(code);
+                    sols[code]=alg;
                     while (c>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
                     tuplesAtCost.get(c).add(code);
                 }
@@ -296,13 +291,15 @@ public class LoopoverNRGSetup {
                         }
                         nlocs[i]=r*N+c;
                     }
-                    int nco=co+2;
+                    String nalg=canonical(N,(""+dirNames[d])+sols[f]+(""+dirNames[(d+2)%4]));
+                    int nco=nalg.length();
                     int code=code(nlocs);
-                    if (nco<cost[code]) {
-                        if (cost[code]!=Integer.MAX_VALUE)
-                            tuplesAtCost.get(cost[code]).remove(code);
-                        par[code]=f*4+d;
-                        cost[code]=nco;
+                    if (sols[code]==null||nco<sols[code].length()) {
+                        if (nco<co) throw new RuntimeException("Negative-weight edge in configuration graph: "+sols[f]+" --> "+nalg);
+                        //^^^only throw this exception if we actually try traversing a negative-weight edge
+                        if (sols[code]!=null)
+                            tuplesAtCost.get(sols[code].length()).remove(code);
+                        sols[code]=nalg;
                         while (nco>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
                         tuplesAtCost.get(nco).add(code);
                     }
@@ -325,24 +322,13 @@ public class LoopoverNRGSetup {
         return code(nL);
     }
     public int cost(int v) {
-        return cost[v];
+        return sols[v]==null?-1:sols[v].length();
     }
     public int cost(int[] L, int lr, int lc) {
-        return cost[tupleCode(L,lr,lc)];
-    }
-    public String[] actionsol(int v) {
-        if (cost[v]==Integer.MAX_VALUE) throw new RuntimeException("Invalid tuple of locations.");
-        StringBuilder out=new StringBuilder();
-        for (; par[v]>-1; v=par[v]/4)
-            out.append(dirNames[par[v]%4]);
-        return new String[] {out.toString(),algs[-1-par[v]]};
-    }
-    public String[] actionsol(int[] L, int lr, int lc) {
-        return actionsol(tupleCode(L,lr,lc));
+        return cost(tupleCode(L,lr,lc));
     }
     public String sol(int v) {
-        String[] t=actionsol(v);
-        return t[0]+t[1]+inv(t[0]);
+        return sols[v];
     }
     public String sol(int[] L, int lr, int lc) {
         return sol(tupleCode(L,lr,lc));
@@ -626,8 +612,7 @@ public class LoopoverNRGSetup {
                     if (att[i]==att[j]) norepeat=false;
             if (norepeat) {
                 int[] permd_locs=new int[K]; for (int i=0; i<K; i++) permd_locs[i]=opens[att[i]];
-                String[] info=bfs.actionsol(permd_locs,lr,lc);
-                String sol=info[0]+info[1]+inv(info[0]);
+                String sol=bfs.sol(permd_locs,lr,lc);
                 diam=Math.max(diam,sol.length());
                 Board b=new Board(N,lr,lc);
                 b.move(sol);
@@ -645,7 +630,6 @@ public class LoopoverNRGSetup {
                         match=false;
                 if (!match) {
                     System.out.println("!!!ERROR!!!");
-                    System.out.println("data="+Arrays.toString(info));
                     System.out.println("sol="+sol);
                     System.out.println("tP="+Arrays.toString(perm)
                             +",permd_locs="+Arrays.toString(permd_locs)
@@ -691,16 +675,18 @@ public class LoopoverNRGSetup {
                 comm("RRDLULDRUL","LDRULDLURR"),
                 comm("DRDRULDLUU","DLDLURDRUU")
         );
+        System.out.println(LoopoverNRGAlgorithmFinder.primaryAlgs(5,comms).get(0));
         LoopoverNRGSetup[] bfss={
                 new LoopoverNRGSetup(5,comms,P),
                 new LoopoverNRGSetup(5,LoopoverNRGAlgorithmFinder.primaryAlgs(5,comms).get(0),P)
-        }; //both elements in bfss[] should have the exact same behavior, but they don't
-        for (int code=0; code<bfss[0].cost.length; code++) {
+        };
+        for (LoopoverNRGSetup bfs:bfss) verify(bfs);
+        for (int code=0; code<bfss[0].sols.length; code++) {
             int[] costs=new int[bfss.length];
-            for (int i=0; i<bfss.length; i++) costs[i]=bfss[i].cost[code];
+            for (int i=0; i<bfss.length; i++) costs[i]=bfss[i].cost(code);
             if (costs[0]!=costs[1]) {
                 for (LoopoverNRGSetup bfs:bfss)
-                    System.out.println(Arrays.toString(bfs.actionsol(code)));
+                    System.out.println(bfs.sol(code));
                 throw new RuntimeException("Mismatch: tuple="+Arrays.toString(bfss[0].decode(code))
                         +" costs="+Arrays.toString(costs));
             }
