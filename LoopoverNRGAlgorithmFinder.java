@@ -14,7 +14,7 @@ public class LoopoverNRGAlgorithmFinder {
     private static int N, K;
     private static long st, mark0=10_000, mark, stage;
     private static int shiftsum;
-    private static long ncalls;
+    private static long ncalls, amt;
     private static int[] syllLens;
     private static int[] rshift, cshift;
     private static Map<Integer,Map<String,int[][]>> results;
@@ -23,35 +23,34 @@ public class LoopoverNRGAlgorithmFinder {
         if (System.currentTimeMillis()-st>=mark) {
             stage++;
             mark=(long)(mark0*Math.exp(Math.sqrt(stage)));
-            System.out.printf("%10.3f%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,results.get(4).size());
+            System.out.printf("%10.3f%12d%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
         }
         //tlen=current length of move sequence that syllLens[0:idx] represents
         //idx%2==0: we want current syllable to be horizontal; ==1: we want it to be vertical
         ncalls++;
-        if (Math.min(dr,N-dr)+Math.min(dc,N-dc)>K-tlen)
+        if (Math.min(dr,N-dr)+Math.min(dc,N-dc)>K-tlen||shiftsum>K-tlen)
             //gripped piece is too far to bring back to beginning in enough moves
+            //or there are not enough moves available to unshift all rows and columns
             return;
-        if (shiftsum>K-tlen) //not enough moves available to unshift all rows and columns
-            return;
-        //System.out.println(tlen);
-        //every move seequence can have its moves rotated s.t. the first and last syllables are of different types
-        if (idx%2==0&&dr==0&&dc==0) {
-            boolean good=true;
-            for (int r=0; r<N&&good; r++) if (rshift[r]!=0) good=false;
-            for (int c=0; c<N&&good; c++) if (cshift[c]!=0) good=false;
-            if (good) {
-                StringBuilder tmp=new StringBuilder();
-                for (int i=0; i<idx; i++) {
-                    int reps=Math.abs(syllLens[i]);
-                    for (int rep=0; rep<reps; rep++)
-                        tmp.append(i%2==0?(syllLens[i]>0?'R':'L'):(syllLens[i]>0?'D':'U'));
-                }
-                String alg=tmp.toString();
-                int[][] ret=LoopoverNRGSetup.effect(N,alg);
-                int scr=ret[0].length;
-                if (results.containsKey(scr))
-                    results.get(scr).put(alg,ret);
+        //for two move sequences A and B, define "A similar to B" == "A ~ B" == there exists move sequence S s.t. A=S*B*inv(S)
+        //we only want to find a set of move sequences that are mutually not similar to each other
+        //for move sequence A=[A[0],...A[K-1]], define (A<<a)=[A[a],...A[K-1],A[0],...A[a-1]]
+        //then A ~ (A<<a) for all A, a
+        //therefore WLOG we only need to search for move sequences whose first and last syllables are of different types
+        //               vvvvvvvv
+        if (shiftsum==0&&idx%2==0&&dr==0&&dc==0) {
+            StringBuilder tmp=new StringBuilder();
+            for (int i=0; i<idx; i++) {
+                int reps=Math.abs(syllLens[i]);
+                for (int rep=0; rep<reps; rep++)
+                    tmp.append(i%2==0?(syllLens[i]>0?'R':'L'):(syllLens[i]>0?'D':'U'));
             }
+            String alg=tmp.toString();
+            int[][] ret=LoopoverNRGSetup.effect(N,alg);
+            int scr=ret[0].length;
+            if (results.containsKey(scr))
+                results.get(scr).put(alg,ret);
+            amt++;
         }
         if (tlen==K)
             return;
@@ -80,19 +79,6 @@ public class LoopoverNRGAlgorithmFinder {
             }
         }
     }
-    private static void blobs(int K) {
-        results=new HashMap<>();
-        results.put(4,new HashMap<>());
-        syllLens=new int[K];
-        ncalls=0;
-        LoopoverNRGAlgorithmFinder.K=K;
-        rshift=new int[N]; cshift=new int[N];
-        mark=mark0;
-        stage=0;
-        dfs(0,0,0,0);
-        System.out.println("#dfs() calls="+ncalls);
-        System.out.println("#strict blobs with score 4="+results.get(4).size());
-    }
     public static TreeSet<String> primaryAlgs(int N, Collection<String> algs) {
         TreeSet<String> primaryAlgs=new TreeSet<>(algcomp), seen=new TreeSet<>(algcomp);
         for (String alg:algs) {
@@ -116,14 +102,21 @@ public class LoopoverNRGAlgorithmFinder {
     }
     public static void main(String[] args) {
         N=5;
-        for (int L=32; L<=32; L++) {
-            System.out.println("L="+L);
-            st=System.currentTimeMillis();
-            blobs(L);
-            Set<String> algs=primaryAlgs(N,results.get(4).keySet());
-            System.out.println(algs);
-            System.out.println("num="+algs.size());
-            System.out.println("time="+(System.currentTimeMillis()-st));
-        }
+        K=32;
+        System.out.printf("N=%d,K=%d%n",N,K);
+        st=System.currentTimeMillis();
+        results=new HashMap<>();
+        results.put(4,new HashMap<>());
+        syllLens=new int[K];
+        ncalls=amt=0;
+        rshift=new int[N]; cshift=new int[N];
+        mark=mark0;
+        stage=0;
+        dfs(0,0,0,0);
+        System.out.printf("%10.3f%12d%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
+        Set<String> algs=primaryAlgs(N,results.get(4).keySet());
+        System.out.println(algs);
+        System.out.println("num="+algs.size());
+        System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
