@@ -13,6 +13,7 @@ public class LoopoverNRGAlgorithmFinder {
     };
     private static int N, K;
     private static long st, mark0=10_000, mark, stage;
+    private static int mincost;
     private static long ncalls;
     private static int[] syllLens;
     private static int[] rshift, cshift;
@@ -29,11 +30,11 @@ public class LoopoverNRGAlgorithmFinder {
         if (Math.min(dr,N-dr)+Math.min(dc,N-dc)>K-tlen)
             //gripped piece is too far to bring back to beginning in enough moves
             return;
-        int mincost=0;
+        /*int mincost=0;
         for (int r=0; r<N; r++)
             mincost+=Math.min(rshift[r],N-rshift[r]);
         for (int c=0; c<N; c++)
-            mincost+=Math.min(cshift[c],N-cshift[c]);
+            mincost+=Math.min(cshift[c],N-cshift[c]);*/
         if (mincost>K-tlen) //not enough moves available to unshift all rows and columns
             return;
         //System.out.println(tlen);
@@ -63,16 +64,22 @@ public class LoopoverNRGAlgorithmFinder {
             //WLOG second syllable moves gripped piece down <=N/2 units
             if (tlen+len<=K&&(idx>1||offset<=N-offset)) {
                 syllLens[idx]=offset<=N-offset?len:(-len);
+                int mincost0=mincost;
                 if (idx%2==0) { //horizontal syllable
+                    mincost-=Math.min(rshift[dr],N-rshift[dr]);
                     rshift[dr]=mod(rshift[dr]+offset,N);
+                    mincost+=Math.min(rshift[dr],N-rshift[dr]);
                     dfs(idx+1,tlen+len,dr,mod(dc+offset,N));
                     rshift[dr]=mod(rshift[dr]-offset,N);
                 }
                 else { //vertical syllable
+                    mincost-=Math.min(cshift[dc],N-cshift[dc]);
                     cshift[dc]=mod(cshift[dc]+offset,N);
+                    mincost+=Math.min(cshift[dc],N-cshift[dc]);
                     dfs(idx+1,tlen+len,mod(dr+offset,N),dc);
                     cshift[dc]=mod(cshift[dc]-offset,N);
                 }
+                mincost=mincost0;
             }
         }
     }
