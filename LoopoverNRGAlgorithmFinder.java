@@ -2,15 +2,13 @@ import java.util.*;
 public class LoopoverNRGAlgorithmFinder {
     //a "blob" in a NxN Loopover NRG board is a move sequence that has no net displacement on the gripped piece
     //a "strict blob" is a blob with the additional constraint that all rows and all columns have no "net shift"
-    private static int mod(int n, int k) {
-        return (n%k+k)%k;
-    }
     private static final Comparator<String> algcomp=new Comparator<String>() {
         @Override
         public int compare(String o1, String o2) {
             return o1.length()==o2.length()?o1.compareTo(o2):o1.length()-o2.length();
         }
     };
+    private static String form="%10.3f%16d%16d%16d%n";
     private static int N, K;
     private static long st, mark0=10_000, mark, stage;
     private static int shiftsum;
@@ -22,13 +20,13 @@ public class LoopoverNRGAlgorithmFinder {
     private static void dfs(int idx, int tlen, int dr, int dc) {
         if (System.currentTimeMillis()-st>=mark) {
             stage++;
-            mark=(long)(mark0*Math.exp(Math.sqrt(stage)));
-            System.out.printf("%10.3f%12d%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
+            mark=(long)(mark0*Math.pow(stage,2.5));
+            System.out.printf(form,(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
         }
         //tlen=current length of move sequence that syllLens[0:idx] represents
         //idx%2==0: we want current syllable to be horizontal; ==1: we want it to be vertical
         ncalls++;
-        if (Math.min(dr,N-dr)+Math.min(dc,N-dc)>K-tlen||shiftsum>K-tlen)
+        if (shiftsum>K-tlen||Math.min(dr,N-dr)+Math.min(dc,N-dc)>K-tlen)
             //gripped piece is too far to bring back to beginning in enough moves
             //or there are not enough moves available to unshift all rows and columns
             return;
@@ -62,18 +60,20 @@ public class LoopoverNRGAlgorithmFinder {
                 syllLens[idx]=offset<=N-offset?len:(-len);
                 int mincost0=shiftsum;
                 if (idx%2==0) { //horizontal syllable
-                    shiftsum-=Math.min(rshift[dr],N-rshift[dr]);
-                    rshift[dr]=mod(rshift[dr]+offset,N);
+                    int r0=rshift[dr];
+                    shiftsum-=Math.min(r0,N-r0);
+                    rshift[dr]=(r0+offset)%N;
                     shiftsum+=Math.min(rshift[dr],N-rshift[dr]);
-                    dfs(idx+1,tlen+len,dr,mod(dc+offset,N));
-                    rshift[dr]=mod(rshift[dr]-offset,N);
+                    dfs(idx+1,tlen+len,dr,(dc+offset)%N);
+                    rshift[dr]=r0;
                 }
                 else { //vertical syllable
-                    shiftsum-=Math.min(cshift[dc],N-cshift[dc]);
-                    cshift[dc]=mod(cshift[dc]+offset,N);
+                    int c0=cshift[dc];
+                    shiftsum-=Math.min(c0,N-c0);
+                    cshift[dc]=(c0+offset)%N;
                     shiftsum+=Math.min(cshift[dc],N-cshift[dc]);
-                    dfs(idx+1,tlen+len,mod(dr+offset,N),dc);
-                    cshift[dc]=mod(cshift[dc]-offset,N);
+                    dfs(idx+1,tlen+len,(dr+offset)%N,dc);
+                    cshift[dc]=c0;
                 }
                 shiftsum=mincost0;
             }
@@ -111,9 +111,9 @@ public class LoopoverNRGAlgorithmFinder {
         ncalls=amt=0;
         rshift=new int[N]; cshift=new int[N];
         mark=mark0;
-        stage=0;
+        stage=1;
         dfs(0,0,0,0);
-        System.out.printf("%10.3f%12d%12d%12d%n",(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
+        System.out.printf(form,(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
         Set<String> algs=primaryAlgs(N,results.get(4).keySet());
         System.out.println(algs);
         System.out.println("num="+algs.size());
