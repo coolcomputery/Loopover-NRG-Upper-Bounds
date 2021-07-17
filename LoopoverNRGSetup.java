@@ -192,29 +192,35 @@ public class LoopoverNRGSetup {
         this.N=N; V=N*N;
         this.tP=tP;
         {
-            Set<String> tmp=new HashSet<>();
-            //include inverses, reflections, and move sequence rotations of the initial algorithms
+            Set<String> tmp=new TreeSet<>(new Comparator<String>() {
+                @Override
+                public int compare(String o1, String o2) {
+                    return o1.length()==o2.length()?o1.compareTo(o2):o1.length()-o2.length();
+                }
+            });
+            //include inverses and reflections of the initial algorithms
             for (String alg_init:algs_init) {
                 String red=canonical(N,alg_init);
-                //every rotated version of a X-cycle is another X-cycle
-                //to see why, let a X-cycle algorithm consist of moves M=[M[0]...M[L-1]]
-                //then any rotated version M[a]...M[L-1] M[0]...M[a-1] can be written as S M S^-1,
-                //where S=inv([M[0]...M[a-1]])
-                //i.e. every rotated version of M is M combined with some setup moves
-                //we make these rotated versions of these algorithms ahead of time in order to avoid
-                //  a ConcurrentModificationException later on (i.e. we avoid traversing 0-length edges in our graph)
-                //System.out.println(alg_init+"-->"+red);
-                for (int i=0; i<red.length(); i++) {
-                    StringBuilder s=new StringBuilder();
-                    for (int k=0; k<red.length(); k++)
-                        s.append(red.charAt((k+i)%red.length()));
-                    for (int b=0; b<16; b++) {
-                        String ret=canonical(N,transformed(s.toString(),b));
-                        tmp.add(ret);
-                    }
+                //say two move sequences A,B are similar if there exists a move sequence S s.t. A=S B inv(S)
+                //then if A and B are blobs, they cycle the same number of pieces in the same fashion
+                //  i.e. if A is a 3-cycle, then so is B; if a is a 2,2-cycle, then so is B
+                //for A=[A[0], A[1], ... A[K-1]], define (A<<a) to be [A[a], A[a+1], ... A[K-1], A[0], ..., A[a-1]]
+                //then A is similar to (A<<a) for all A,a
+                //we want to rotate A s.t. the beginning and end moves are not both horizontal or both vertical
+                //this is so that for any S, canonical(S+A+inv(S)).length() >= canonical(A).length()
+                while (red.length()>1) {
+                    char s=red.charAt(0), e=red.charAt(red.length()-1);
+                    boolean sh=s=='R'||s=='L', eh=e=='R'||e=='L';
+                    if (sh==eh)
+                        red=canonical(N,red.substring(1)+""+s);
+                    else break;
+                }
+                for (int b=0; b<16; b++) {
+                    String ret=canonical(N,transformed(red,b));
+                    tmp.add(ret);
                 }
             }
-            System.out.println("# algs after rotations/inverses/reflections="+tmp.size());
+            //System.out.println("# algs after rotations/inverses/reflections="+tmp.size());
             this.algs=new String[tmp.size()];
             int i=0;
             for (String s:tmp) algs[i++]=s;
@@ -247,70 +253,100 @@ public class LoopoverNRGSetup {
             if (ptsetss.get(i).size()==0)
                 throw new RuntimeException("Incongruent permutations: "+Arrays.toString(P)+"!=tP="+Arrays.toString(tP));
         }
-        bfs();
+        search();
     }
-    private void bfs() {
+    private void search() {
         long sttime=System.currentTimeMillis();
         int AMT=1; for (int rep=0; rep<K; rep++) AMT*=V;
         sols=new String[AMT];
-        List<Set<Integer>> tuplesAtCost=new ArrayList<>();
-        for (int ai=0; ai<algs.length; ai++) {
-            String alg=algs[ai];
-            int c=alg.length();
-            for (int[] ptset:ptsetss.get(ai)) {
-                int code=code(ptset);
-                if (sols[code]==null||c<sols[code].length()) {
-                    if (sols[code]!=null)
-                        tuplesAtCost.get(sols[code].length()).remove(code);
-                    sols[code]=alg;
-                    while (c>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
-                    tuplesAtCost.get(c).add(code);
-                }
-            }
-        }
-        diam=0;
-        long reached=0;
-        for (int co=0; co<tuplesAtCost.size(); co++) //Dijkstra's algorithm
-        if (tuplesAtCost.get(co).size()>0) {
-            System.out.println(co+":"+tuplesAtCost.get(co).size());
-            reached+=tuplesAtCost.get(co).size();
-            diam=Math.max(diam,co);
-            for (int f:tuplesAtCost.get(co)) {
-                int[] locs=decode(f);
-                for (int d=0; d<4; d++) { //D, R, U, L
-                    int shift=d/2==0?-1:1; //imagine moving the gripped piece in direction d
-                    //then relative to the gripped piece, all other pieces move in the opposite direction
-                    int[] nlocs=new int[locs.length];
-                    for (int i=0; i<locs.length; i++) {
-                        int r=locs[i]/N, c=locs[i]%N;
-                        if (d%2==0) {
-                            if (c!=0) r=mod(r-shift,N);
-                        }
-                        else {
-                            if (r!=0) c=mod(c-shift,N);
-                        }
-                        nlocs[i]=r*N+c;
-                    }
-                    String nalg=canonical(N,(""+dirNames[d])+sols[f]+(""+dirNames[(d+2)%4]));
-                    int nco=nalg.length();
-                    int code=code(nlocs);
-                    if (sols[code]==null||nco<sols[code].length()) {
-                        if (nco<co) throw new RuntimeException("Negative-weight edge in configuration graph: "+sols[f]+" --> "+nalg);
-                        //^^^only throw this exception if we actually try traversing a negative-weight edge
-                        if (sols[code]!=null)
-                            tuplesAtCost.get(sols[code].length()).remove(code);
-                        sols[code]=nalg;
-                        while (nco>=tuplesAtCost.size()) tuplesAtCost.add(new HashSet<>());
-                        tuplesAtCost.get(nco).add(code);
-                    }
-                }
-            }
-            tuplesAtCost.set(co,null);
-        }
         long expreached=1;
         for (int rep=0; rep<K; rep++) expreached*=N*N-1-rep;
+        class Pc {
+            int code; String sol, orig;
+            Pc(int c, String s, String o) {
+                code=c;
+                sol=s;
+                orig=o;
+            }
+            public String toString() {
+                return code+","+sol+","+orig;
+            }
+        }
+        Set<String> seen=new HashSet<>();
+        List<List<Pc>> fronts=new ArrayList<>();
+        for (int ai=0; ai<algs.length; ai++) {
+            String a=algs[ai];
+            int c=a.length();
+            //System.out.println(a);
+            for (int[] ptset:ptsetss.get(ai)) {
+                int code=code(ptset);
+                sols[code]=a;
+                while (c>=fronts.size()) fronts.add(new ArrayList<>());
+                fronts.get(c).add(new Pc(code,a,a));
+            }
+        }
+        for (int co=0; co<fronts.size(); co++) if (fronts.get(co).size()>0) {
+            List<Pc> front=fronts.get(co);
+            int fsz=0;
+            for (int fi=0; fi<front.size(); fi++) {
+                /*if (front.get(fi).sol.equals("LURULDRDDLDRULURULURDLDDRDLURU"))
+                    System.out.println(front.get(fi)+" co="+co+"; ...="+sols[front.get(fi).code].length());*/
+                if (sols[front.get(fi).code].length()==co&&!seen.contains(front.get(fi).toString())) {
+                    fsz++;
+                    seen.add(front.get(fi).toString());
+                    int f=front.get(fi).code;
+                    int[] locs=decode(f);
+                    for (int d=0; d<4; d++) { //D, R, U, L
+                        int shift=d/2==0?-1:1; //imagine moving the gripped piece in direction d
+                        //then relative to the gripped piece, all other pieces move in the opposite direction
+                        int[] nlocs=new int[locs.length];
+                        for (int i=0; i<locs.length; i++) {
+                            int r=locs[i]/N, c=locs[i]%N;
+                            if (d%2==0) {
+                                if (c!=0) r=mod(r-shift,N);
+                            }
+                            else {
+                                if (r!=0) c=mod(c-shift,N);
+                            }
+                            nlocs[i]=r*N+c;
+                        }
+                        String nalg=canonical(N,(""+dirNames[d])+front.get(fi).sol+(""+dirNames[(d+2)%4]));
+                        int nco=nalg.length();
+                        int code=code(nlocs);
+                        if (sols[code]==null||nco<=sols[code].length()) {
+                            if (nco<co&&(sols[code]==null||nco<sols[code].length()))
+                                throw new RuntimeException("Negative-weight edge in configuration graph: "
+                                        +front.get(fi).sol+" --> "+nalg+" (orig="+front.get(fi).orig+") (code="+code+")");
+                            //^^^only throw this exception if we actually try traversing a negative-weight edge
+                            if (sols[code]==null||nco<sols[code].length())
+                                sols[code]=nalg;
+                            /*if (nalg.equals("LLURULDRDDLDRULURULURDLDDRDLURUR"))
+                                System.out.println(sols[code]+" "+code);*/
+                            if (nco==co) {
+                                front.add(new Pc(code,nalg,front.get(fi).orig));
+                                //System.out.println(sols[f]+" --> "+nalg);
+                            }
+                            else {
+                                while (nco>=fronts.size()) fronts.add(new ArrayList<>());
+                                fronts.get(nco).add(new Pc(code,nalg,front.get(fi).orig));
+                            }
+                        }
+                    }
+                }
+            }
+            System.out.print(" "+co+":"+fsz);
+        }
+        System.out.println();
+        diam=0;
+        for (int code=0; code<AMT; code++)
+            if (sols[code]!=null) diam=Math.max(diam,sols[code].length());
+        int[] freq=new int[diam+1];
+        for (int code=0; code<AMT; code++) if (sols[code]!=null) freq[sols[code].length()]++;
+        System.out.println("final distribution:");
+        for (int d=0; d<=diam; d++) if (freq[d]>0) System.out.print(" "+d+":"+freq[d]);
+        int reached=0; for (int v:freq) reached+=v;
         if (reached!=expreached) throw new RuntimeException("Unexpected # of nodes reached: "+reached+" instead of "+expreached);
-        System.out.printf("K=%d,diameter=%d,BFS time=%d%n",K,diam,(System.currentTimeMillis()-sttime));
+        System.out.printf("\nN=%d,tP=%s,diameter=%d,BFS time=%d%n",N,Arrays.toString(tP),diam,(System.currentTimeMillis()-sttime));
     }
     //end of BFS part
 
@@ -333,30 +369,16 @@ public class LoopoverNRGSetup {
     public String sol(int[] L, int lr, int lc) {
         return sol(tupleCode(L,lr,lc));
     }
-    //a "blob" is a move sequence that leads to no net displacement in the gripped piece
-    public static LoopoverNRGSetup cyc3bfs(int N) {
-        //3-cycle: pt 0 --> pt 1 --> pt 2 --> pt0
+    public static LoopoverNRGSetup cyc3(int N) {
         List<String> algs=new ArrayList<>();
         if (N>=4)
             algs.add("RDLUURDLDLURDRULLDRUULDRDRULDLUR"); //32-move 3-cycle
-        //below commutators found by brute-force search of all 3-cycles comm(A,B) for length-10 blobs A, B
         if (N==5)
-            algs.addAll(Arrays.asList(
-                    comm("RDRURDLULL","ULULDRURDD"),
-                    comm("UURDRULDLD","LLDLURDRUR"),
-                    comm("LLDLURDRUR","URURDLULDD"),
-                    comm("LLDRDLURUR","URULURDLDD")
-            ));
+            algs.add("DDLDLDRULURRUURULDRDLDLLDRDLURURURULURDL");
         else if (N>5)
             algs.addAll(Arrays.asList(
-                    comm("LURDLULDRR","RRURDLULDL"),
-                    comm("RDRURDLULL","LDRULDLURR"),
-                    comm("LLURDRULDR","RURDRULDLL"),
-                    comm("LULDLURDRR","RRDLULDRUL"),
-                    comm("DDLDRULURU","UULDRDLURD"),
-                    comm("DDRULURDLU","UULURDLDRD"),
-                    comm("LULDLURDRR","RDLURDRULL"),
-                    comm("UURULDRDLD","DLURDLDRUU")
+                    "DDDDLDRULURUUULDRDLURDDLDRDLURUUULDRULUR",
+                    "DDDDLDRULURUUURDLDRULDDLDRDLURUUURDLURUL"
             ));
         if (N%2==0) {
             for (int height=1; height<=N/2; height++) {
@@ -366,8 +388,8 @@ public class LoopoverNRGSetup {
                 StringBuilder alg=new StringBuilder();
                 alg.append(rd).append(rd);
                 if (height<N/2)
-                for (int i=0; i<N+2*height; i++)
-                    alg.append(inv(""+alg.charAt(i)));
+                    for (int i=0; i<N+2*height; i++)
+                        alg.append(inv(""+alg.charAt(i)));
                 alg.append(alg);
                 algs.add(alg.toString());
             }
@@ -376,218 +398,31 @@ public class LoopoverNRGSetup {
                 new LoopoverNRGSetup(N,algs,new int[] {1,2,0}):
                 null;
     }
-    public static LoopoverNRGSetup swap22bfs(int N) {
-        //double swapper: pt 0 <--> pt 1, pt 2 <--> pt 3
-        if (N>=5) {
-            //below commutators found by brute-force search of all 2,2-cycle strict blobs
-            List<String> algs=Arrays.asList(
-                    "DDLDRULURULURDLDDRDLURULURULDR",
-                    "DDLDLURDRUURDLDLUULDRDRUURULDLUR",
-                    "DDLDRULURURULDRDLLDRDLURURULURDL",
-                    "DLDLDRURULULDRDLURDRULDRDLULURUR"
-            );
-            if (N==5)
-                algs.addAll(Arrays.asList(
-                        comm("UULDRDLURD","LDLDRULURR"),
-                        comm("LDLULDRURR","DRDRULDLUU"),
-                        comm("LDLDRULURR","RURULDRDLL"),
-                        comm("RRULURDLDL","DRDLDRULUU"),
-                        comm("LLURDRULDR","UURDRULDLD"),
-                        comm("LDRULDLURR","RDLURDRULL"),
-                        comm("LDRULDLURR","DRDRULDLUU"),
-                        comm("RRDRULDLUL","DLDLURDRUU"),
-                        comm("LLDRDLURUR","UULURDLDRD"),
-                        comm("LLURULDRDR","LLDRDLURUR"),
-                        comm("UURDLDRULD","DDRULURDLU"),
-                        comm("RRDLDRULUL","LLURULDRDR"),
-                        comm("DDLURULDRU","UURDLDRULD"),
-                        comm("DDRURDLULU","LDRULDLURR"),
-                        comm("DDLULDRURU","DRDRULDLUU"),
-                        comm("LURDLULDRR","RDLURDRULL"),
-                        comm("UULDLURDRD","DRDRULDLUU"),
-                        comm("UULDRDLURD","DRULDRDLUU"),
-                        comm("RRDLULDRUL","LDRULDLURR"),
-                        comm("DRDRULDLUU","DLDLURDRUU")
-                ));
-            else if (N==6)
-                algs.addAll(Arrays.asList(
-                        comm("DDLURULDRU","URUULDRDDL"),
-                        comm("RURDRULDLL","RDLULLDRUR"),
-                        comm("UULDLURDRD","DRRURDLLUL"),
-                        comm("URUULDRDDL","DRDLDRULUU"),
-                        comm("LLDRDLURUR","ULUURDLDDR"),
-                        comm("ULDDRDLUUR","UULURDLDRD"),
-                        comm("URUULDRDDL","DLDRDLURUU"),
-                        comm("DDLULDRURU","UURDRULDLD"),
-                        comm("URURDLULDD","LULLDRURRD"),
-                        comm("URULURDLDD","DDRDLURULU"),
-                        comm("LDRULDLURR","DRDRULDLUU"),
-                        comm("UULURDLDRD","DDRDLURULU"),
-                        comm("ULDRDDLURU","UURULDRDLD"),
-                        comm("RDRDLURULL","LULURDLDRR"),
-                        comm("DDRURDLULU","LDRULDLURR"),
-                        comm("DRDLDRULUU","RUULURDDLD"),
-                        comm("LDLLURDRRU","LDRRURDLLU"),
-                        comm("DRDRULDLUU","LLDLURRDRU"),
-                        comm("URRDRULLDL","ULULDRURDD"),
-                        comm("DDLDRULURU","UULURDDLDR"),
-                        comm("RULUURDLDD","DLDRDLURUU"),
-                        comm("URRDLULLDR","LDLULDRURR"),
-                        comm("UULDRDLURD","DRULDRDLUU"),
-                        comm("DLDLURDRUU","UURDRULDLD"),
-                        comm("LURRDRULLD","LULDLURDRR"),
-                        comm("LDLULDRURR","URRDRULLDL"),
-                        comm("LLULDRRURD","UURDRULDLD"),
-                        comm("LLDLURDRUR","RURDLLULDR"),
-                        comm("LDDRULUURD","UULURDLDRD"),
-                        comm("LULDRRURDL","RDRURDLULL"),
-                        comm("RRULDLLURD","ULDLLURDRR"),
-                        comm("URDLURULDD","RDDLDRUULU"),
-                        comm("LLDRURDLUR","RRULDLURDL"),
-                        comm("UURDLDDRUL","DDRDLUURUL"),
-                        comm("ULURULDRDD","DRDLDRULUU"),
-                        comm("UURDLDRULD","RDRDLURULL"),
-                        comm("ULLDRURRDL","RURDRULDLL"),
-                        comm("DLURDLDRUU","URDLURULDD"),
-                        comm("DLLULDRRUR","RRULDLURDL"),
-                        comm("RUULURDDLD","RRDLDRULUL"),
-                        comm("LDDRDLUURU","UURULDRDLD"),
-                        comm("LULDLURDRR","LURDRRULDL"),
-                        comm("ULDLLURDRR","RRDRULDLUL"),
-                        comm("DLDLURDRUU","URRDRULLDL"),
-                        comm("RRDRULDLUL","LULLDRURRD"),
-                        comm("RDLUURULDD","DDRDLUURUL"),
-                        comm("RURRDLULLD","DLDLURDRUU"),
-                        comm("LLULDRURDR","RURDLLULDR"),
-                        comm("DRULLDLURR","DRURRDLULL"),
-                        comm("RRDRULLDLU","ULULDRURDD"),
-                        comm("RRULURDLDL","DDLDRUULUR"),
-                        comm("RULUURDLDD","RDRDLURULL"),
-                        comm("ULDDRDLUUR","UURULDRDLD"),
-                        comm("DRDDLURUUL","UURDLDRULD"),
-                        comm("LLURDRULDR","RRULDLURDL"),
-                        comm("DRDDLURUUL","UURULDRDLD"),
-                        comm("RRDLULDRUL","DDLULDRURU"),
-                        comm("DRRULDLLUR","LLULDRURDR"),
-                        comm("UULURDDLDR","DLDRDLURUU"),
-                        comm("DDLDRUULUR","UURULDRDLD"),
-                        comm("ULDRULURDD","DLURDLDRUU"),
-                        comm("RRULURDLDL","DLDDRULUUR"),
-                        comm("UULURDLDRD","DDLDRULURU"),
-                        comm("RDRURDLULL","LLULDRRURD"),
-                        comm("UURULDRDLD","URDLDDRULU"),
-                        comm("LLULDRURDR","URRDRULLDL"),
-                        comm("URRDRULLDL","RULLDLURRD"),
-                        comm("DRDLDRULUU","RULUURDLDD"),
-                        comm("RDLDDRULUU","LULURDLDRR"),
-                        comm("RDLURDRULL","LLDRURDLUR"),
-                        comm("LDRDDLURUU","RRULURDLDL"),
-                        comm("ULURULDRDD","DLDRUULURD"),
-                        comm("LDRRURDLLU","LULDLURDRR"),
-                        comm("URDLURULDD","DRDDLURUUL"),
-                        comm("DLLURDRRUL","DRRURDLLUL"),
-                        comm("URURDLULDD","UULDLURDRD"),
-                        comm("LULURDLDRR","LDLDRULURR"),
-                        comm("LURUULDRDD","LLDRDLURUR"),
-                        comm("DLDDRULUUR","LUURDLDDRU"),
-                        comm("URRDRULLDL","LDRULDLURR"),
-                        comm("ULUURDLDDR","DRULDRDLUU"),
-                        comm("UULDLURDRD","UURDRULDLD"),
-                        comm("DDRDLURULU","ULURULDRDD"),
-                        comm("URDRRULDLL","LLULDRURDR"),
-                        comm("RURDRULDLL","LULDLURDRR"),
-                        comm("UURDLDRULD","RDDLDRUULU")
-                ));
-            else
-                algs.addAll(Arrays.asList(
-                        comm("DDLURULDRU","URUULDRDDL"),
-                        comm("RURDRULDLL","RDLULLDRUR"),
-                        comm("UULDLURDRD","DRRURDLLUL"),
-                        comm("LLDRDLURUR","ULUURDLDDR"),
-                        comm("URDRRULDLL","DLULLDRURR"),
-                        comm("ULDDRDLUUR","UULURDLDRD"),
-                        comm("URUULDRDDL","DRDDLURUUL"),
-                        comm("DDLULDRURU","UURDRULDLD"),
-                        comm("URDRRULDLL","DLLULDRRUR"),
-                        comm("URURDLULDD","LULLDRURRD"),
-                        comm("LDRULDLURR","DRDRULDLUU"),
-                        comm("ULDRDDLURU","UURULDRDLD"),
-                        comm("RDRDLURULL","LULURDLDRR"),
-                        comm("DDLDRUULUR","UURULDDRDL"),
-                        comm("DDRURDLULU","LDRULDLURR"),
-                        comm("URUULDRDDL","LDRDDLURUU"),
-                        comm("LDLLURDRRU","LDRRURDLLU"),
-                        comm("LLULDRRURD","DRURRDLULL"),
-                        comm("DRDRULDLUU","LLDLURRDRU"),
-                        comm("URRDRULLDL","ULULDRURDD"),
-                        comm("URRDLULLDR","LDLULDRURR"),
-                        comm("UULDRDLURD","DRULDRDLUU"),
-                        comm("DLDLURDRUU","UURDRULDLD"),
-                        comm("LURRDRULLD","LULDLURDRR"),
-                        comm("LLULDRRURD","UURDRULDLD"),
-                        comm("RRURDLLULD","LULLDRURRD"),
-                        comm("LLDLURDRUR","RURDLLULDR"),
-                        comm("LDDRULUURD","UULURDLDRD"),
-                        comm("LULDRRURDL","RDRURDLULL"),
-                        comm("ULDLLURDRR","RRURDLLULD"),
-                        comm("RRULDLLURD","ULDLLURDRR"),
-                        comm("URDLURULDD","RDDLDRUULU"),
-                        comm("LLDRURDLUR","RRULDLURDL"),
-                        comm("UURDLDDRUL","DDRDLUURUL"),
-                        comm("UURDLDRULD","RDRDLURULL"),
-                        comm("RULUURDLDD","RDLDDRULUU"),
-                        comm("ULLDRURRDL","RURDRULDLL"),
-                        comm("DLURDLDRUU","URDLURULDD"),
-                        comm("DLLULDRRUR","RRULDLURDL"),
-                        comm("RUULURDDLD","RRDLDRULUL"),
-                        comm("LDDRDLUURU","LUURULDDRD"),
-                        comm("RRDRULLDLU","LLDLURRDRU"),
-                        comm("DLLULDRRUR","RRDRULLDLU"),
-                        comm("LULDLURDRR","LURDRRULDL"),
-                        comm("DLDLURDRUU","URRDRULLDL"),
-                        comm("LDDRDLUURU","RUULURDDLD"),
-                        comm("RDLUURULDD","DDRDLUURUL"),
-                        comm("RURRDLULLD","DLDLURDRUU"),
-                        comm("LLULDRURDR","RURDLLULDR"),
-                        comm("DRULLDLURR","DRURRDLULL"),
-                        comm("RRDRULLDLU","ULULDRURDD"),
-                        comm("RRULURDLDL","DDLDRUULUR"),
-                        comm("LULLDRURRD","URRDRULLDL"),
-                        comm("RULUURDLDD","RDRDLURULL"),
-                        comm("ULDDRDLUUR","UURULDRDLD"),
-                        comm("DRDDLURUUL","UURDLDRULD"),
-                        comm("LLURDRULDR","RRULDLURDL"),
-                        comm("RUULURDDLD","DDLDRUULUR"),
-                        comm("RRDLULDRUL","DDLULDRURU"),
-                        comm("DRRULDLLUR","LLULDRURDR"),
-                        comm("ULDRULURDD","DLURDLDRUU"),
-                        comm("RRULURDLDL","DLDDRULUUR"),
-                        comm("UURULDRDLD","URDLDDRULU"),
-                        comm("URRDRULLDL","RULLDLURRD"),
-                        comm("RDLDDRULUU","LULURDLDRR"),
-                        comm("RDLURDRULL","LLDRURDLUR"),
-                        comm("LDRDDLURUU","RRULURDLDL"),
-                        comm("ULURULDRDD","DLDRUULURD"),
-                        comm("LDRRURDLLU","LULDLURDRR"),
-                        comm("URDLURULDD","DRDDLURUUL"),
-                        comm("LLULDRRURD","RDRRULDLLU"),
-                        comm("DLLURDRRUL","DRRURDLLUL"),
-                        comm("RULUURDLDD","RDDLDRUULU"),
-                        comm("URURDLULDD","UULDLURDRD"),
-                        comm("LULURDLDRR","LDLDRULURR"),
-                        comm("URUULDRDDL","RDLDDRULUU"),
-                        comm("LURUULDRDD","LLDRDLURUR"),
-                        comm("DLDDRULUUR","LUURDLDDRU"),
-                        comm("URRDRULLDL","LDRULDLURR"),
-                        comm("ULUURDLDDR","DRULDRDLUU"),
-                        comm("UULDLURDRD","UURDRULDLD"),
-                        comm("LULLDRURRD","RDRRULDLLU"),
-                        comm("LDLLURDRRU","URRDRULLDL"),
-                        comm("UURDLDRULD","RDDLDRUULU")
-                ));
-            return new LoopoverNRGSetup(N,algs,new int[] {1,0,3,2});
-        }
-        return null;
+    public static LoopoverNRGSetup cyc2n2(int N) {
+        if (N<5) return null;
+        List<String> algs=new ArrayList<>(Arrays.asList(
+                "DDLDRULURULURDLDDRDLURULURULDR",
+                "DDLDLURDRUURDLDLUULDRDRUURULDLUR",
+                "DDLDRULURURULDRDLLDRDLURURULURDL",
+                "DLDLDRURULULDRDLURDRULDRDLULURUR"
+        ));
+        if (N==5)
+            algs.addAll(Arrays.asList(
+                    "DDLDLURDRDDRDRULDLDDLULDRURURURDLUL",
+                    "DDLDRDLURDDLURDLDRDDLDRULURULURULDR",
+                    "DDLDRDLURDDRULDRDLDDLDRULURURULURDL",
+                    "DDLDLDRULURRUULDRDLURDLLDRDLURURULDRULUR",
+                    "DDLDLDRULURRUULURDLDRDLLDRDLURURULURULDR"
+            ));
+        else if (N==6)
+            algs.addAll(Arrays.asList(
+                    "DDLDRDDLURDDLDRDDLURDDLDRDDLUR, DDLDRULURULURDLDDRDLURULURULDR, DDDLDRULURUULURDDLDDRDLURULURUULDR, DDDLDRULURUURULDDRDLLDRDLURURULUURDL, DDLDDLDRULURURUULDRDDLLDRDLURURUULUR, DDDLDLURDRDDRDRULDLDDDLULDRURUURURDLUL, DDDLDRDLURDDLURDDLDRDDLDRULURULURUULDR, DDDLDRDLURDDLURDLDRDDDLDRULURUULURULDR, DDDLDRDLURDDRULDDRDLDDLDRULURURULUURDL, DDDLDRDLURDDRULDRDLDDDLDRULURUURULURDL, DDDLDDRULUURUULDRDLURDLDDRDLUURUULDRULUR, DDDLDDRULUURUULURDLDRDLDDRDLUURUULURULDR, DDDLDDRULUURUURDLDRULDLDDRDLUURUURDLURUL, DDDLDDRULUURUURULDRDLDLDDRDLUURUURULURDL, DDDLDLLURDRRDDRURDLULULLULDRRURDDRDRULDL, DDDLDLURDRDDRRURDLLULULULDRURDDRDRRULDLL, DDLDLDRULURRUULDRDLURDLLDRDLURURULDRULUR".split(", ")
+            ));
+        else
+            algs.addAll(Arrays.asList(
+                    "DDLDRULURULURDLDDRDLURULURULDR, DDDDLDRUULURUULDRDDDDLURUULDRUULUR, DDDLDRULURUULURDDLDDRDLURULURUULDR, DDDLDRULURUURULDDRDLLDRDLURURULUURDL, DDLDDLDRULURURUULDRDDLLDRDLURURUULUR, DDDDLDRUULURUULURDDLDDRDDLURUULURUULDR, DDDLDDRULUURUULURDDLDDDRDLUURULURUULDR, DDDDLDRUULURUURULDDRDLLDRDDLURUURULUURDL, DDDDLULDRURUUURDRULDLDDLDLURDRUUURURDLUL, DDDDLURULDRUUULDRDLURDDLURDLDRUUULDRULUR, DDDDLURULDRUUURDLDRULDDLURDLDRUUURDLURUL, DDDLDDRULUURUULDRDLURDLDDRDLUURUULDRULUR, DDDLDDRULUURUURDLDRULDLDDRDLUURUURDLURUL, DDDLDDRULUURUURULDDRDLLDDRDLUURURULUURDL, DDDLLULDRRURUURDRULDLDLDLLURDRRUURURDLUL, DDDLULDRURUURDRRULDLLDLDLURDRUURRURDLLUL, DDLDDLDDRULUURURUULDRDDLLDDRDLUURURUULUR, DDLDLDRULURRUULDRDLURDLLDRDLURURULDRULUR".split(", ")
+            ));
+        return new LoopoverNRGSetup(N,algs,new int[] {1,0,3,2});
     }
     public static void verify(LoopoverNRGSetup bfs) {
         if (bfs==null) return;
@@ -648,48 +483,9 @@ public class LoopoverNRGSetup {
         System.out.println("verification time="+(System.currentTimeMillis()-st));
     }
     public static void main(String[] args) {
-        int[] P={1,0,3,2};
-        List<String> comms=Arrays.asList(
-                "DDLDRULURULURDLDDRDLURULURULDR",
-                "DDLDLURDRUURDLDLUULDRDRUURULDLUR",
-                "DDLDRULURURULDRDLLDRDLURURULURDL",
-                "DLDLDRURULULDRDLURDRULDRDLULURUR",
-                comm("UULDRDLURD","LDLDRULURR"),
-                comm("LDLULDRURR","DRDRULDLUU"),
-                comm("LDLDRULURR","RURULDRDLL"),
-                comm("RRULURDLDL","DRDLDRULUU"),
-                comm("LLURDRULDR","UURDRULDLD"),
-                comm("LDRULDLURR","RDLURDRULL"),
-                comm("LDRULDLURR","DRDRULDLUU"),
-                comm("RRDRULDLUL","DLDLURDRUU"),
-                comm("LLDRDLURUR","UULURDLDRD"),
-                comm("LLURULDRDR","LLDRDLURUR"),
-                comm("UURDLDRULD","DDRULURDLU"),
-                comm("RRDLDRULUL","LLURULDRDR"),
-                comm("DDLURULDRU","UURDLDRULD"),
-                comm("DDRURDLULU","LDRULDLURR"),
-                comm("DDLULDRURU","DRDRULDLUU"),
-                comm("LURDLULDRR","RDLURDRULL"),
-                comm("UULDLURDRD","DRDRULDLUU"),
-                comm("UULDRDLURD","DRULDRDLUU"),
-                comm("RRDLULDRUL","LDRULDLURR"),
-                comm("DRDRULDLUU","DLDLURDRUU")
-        );
-        System.out.println(LoopoverNRGAlgorithmFinder.primaryAlgs(5,comms).get(0));
-        LoopoverNRGSetup[] bfss={
-                new LoopoverNRGSetup(5,comms,P),
-                new LoopoverNRGSetup(5,LoopoverNRGAlgorithmFinder.primaryAlgs(5,comms).get(0),P)
-        };
-        for (LoopoverNRGSetup bfs:bfss) verify(bfs);
-        for (int code=0; code<bfss[0].sols.length; code++) {
-            int[] costs=new int[bfss.length];
-            for (int i=0; i<bfss.length; i++) costs[i]=bfss[i].cost(code);
-            if (costs[0]!=costs[1]) {
-                for (LoopoverNRGSetup bfs:bfss)
-                    System.out.println(bfs.sol(code));
-                throw new RuntimeException("Mismatch: tuple="+Arrays.toString(bfss[0].decode(code))
-                        +" costs="+Arrays.toString(costs));
-            }
+        for (int N=4; N<=6; N++) {
+            verify(cyc3(N));
+            verify(cyc2n2(N));
         }
     }
 }
