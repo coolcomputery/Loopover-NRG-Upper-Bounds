@@ -373,8 +373,12 @@ public class LoopoverNRGSetup {
         List<String> algs=new ArrayList<>();
         if (N>=4)
             algs.add("RDLUURDLDLURDRULLDRUULDRDRULDLUR"); //32-move 3-cycle
-        if (N==5)
-            algs.add("DDLDLDRULURRUURULDRDLDLLDRDLURURURULURDL");
+        if (N==5) {
+            algs.addAll(Arrays.asList(
+                    "DDLDLDRULURRUURULDRDLDLLDRDLURURURULURDL",
+                    "DDLDLURULDRDRUULURDDRDRULURDLDLUURUL" //36-move 3-cycle found by DFS search
+            ));
+        }
         else if (N>5)
             algs.addAll(Arrays.asList(
                     "DDDDLDRULURUUULDRDLURDDLDRDLURUUULDRULUR",
@@ -406,7 +410,7 @@ public class LoopoverNRGSetup {
                 "DDLDRULURURULDRDLLDRDLURURULURDL",
                 "DLDLDRURULULDRDLURDRULDRDLULURUR"
         ));
-        if (N==5)
+        if (N==5) {
             algs.addAll(Arrays.asList(
                     "DDLDLURDRDDRDRULDLDDLULDRURURURDLUL",
                     "DDLDRDLURDDLURDLDRDDLDRULURULURULDR",
@@ -414,6 +418,11 @@ public class LoopoverNRGSetup {
                     "DDLDLDRULURRUULDRDLURDLLDRDLURURULDRULUR",
                     "DDLDLDRULURRUULURDLDRDLLDRDLURURULURULDR"
             ));
+            //below algorithms found with brute-force search of all 5x5 NRG "strict blobs"
+            algs.addAll(Arrays.asList(
+                    "DDLURDRDLDRDLDLURDDRULDLDRDLDRDRUL, DDLDLURDRDDRDRULDLDDLULDRURURURDLUL, DDLDRDLURDDLURDLDRDDLDRULURULURULDR, DDLDRDLURDDRULDRDLDDLDRULURURULURDL, DDLDDRULUULDRDLURURULDRDLDRDLURUULUR".split(", ")
+            ));
+        }
         else if (N==6)
             algs.addAll(Arrays.asList(
                     "DDLDRDDLURDDLDRDDLURDDLDRDDLUR, DDLDRULURULURDLDDRDLURULURULDR, DDDLDRULURUULURDDLDDRDLURULURUULDR, DDDLDRULURUURULDDRDLLDRDLURURULUURDL, DDLDDLDRULURURUULDRDDLLDRDLURURUULUR, DDDLDLURDRDDRDRULDLDDDLULDRURUURURDLUL, DDDLDRDLURDDLURDDLDRDDLDRULURULURUULDR, DDDLDRDLURDDLURDLDRDDDLDRULURUULURULDR, DDDLDRDLURDDRULDDRDLDDLDRULURURULUURDL, DDDLDRDLURDDRULDRDLDDDLDRULURUURULURDL, DDDLDDRULUURUULDRDLURDLDDRDLUURUULDRULUR, DDDLDDRULUURUULURDLDRDLDDRDLUURUULURULDR, DDDLDDRULUURUURDLDRULDLDDRDLUURUURDLURUL, DDDLDDRULUURUURULDRDLDLDDRDLUURUURULURDL, DDDLDLLURDRRDDRURDLULULLULDRRURDDRDRULDL, DDDLDLURDRDDRRURDLLULULULDRURDDRDRRULDLL, DDLDLDRULURRUULDRDLURDLLDRDLURURULDRULUR".split(", ")
@@ -483,7 +492,7 @@ public class LoopoverNRGSetup {
         System.out.println("verification time="+(System.currentTimeMillis()-st));
     }
     public static void main(String[] args) {
-        for (int N=4; N<=6; N++) {
+        for (int N=4; N<=5; N++) {
             verify(cyc3(N));
             verify(cyc2n2(N));
         }
