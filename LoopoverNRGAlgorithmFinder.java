@@ -102,7 +102,7 @@ public class LoopoverNRGAlgorithmFinder {
     }
     public static void main(String[] args) {
         N=5;
-        K=32;
+        K=36;
         System.out.printf("N=%d,K=%d%n",N,K);
         st=System.currentTimeMillis();
         results=new HashMap<>();
