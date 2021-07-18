@@ -8,7 +8,7 @@ public class LoopoverNRGAlgorithmFinder {
             return o1.length()==o2.length()?o1.compareTo(o2):o1.length()-o2.length();
         }
     };
-    private static String form="%10.3f%16d%16d%16d%n";
+    private static String form="%10.3f%16d%16d    %s%n";
     private static int N, K;
     private static long st, mark0=10_000, mark, stage;
     private static int shiftsum;
@@ -21,7 +21,9 @@ public class LoopoverNRGAlgorithmFinder {
         if (System.currentTimeMillis()-st>=mark) {
             stage++;
             mark=(long)(mark0*Math.pow(stage,2.5));
-            System.out.printf(form,(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
+            Map<Integer,Integer> sizes=new HashMap<>();
+            for (int sz:results.keySet()) sizes.put(sz,results.get(sz).size());
+            System.out.printf(form,(System.currentTimeMillis()-st)/1000.0,ncalls,amt,sizes);
         }
         //tlen=current length of move sequence that syllLens[0:idx] represents
         //idx%2==0: we want current syllable to be horizontal; ==1: we want it to be vertical
@@ -97,26 +99,32 @@ public class LoopoverNRGAlgorithmFinder {
                 seen.addAll(group);
             }
         }
-        System.out.println("total # algs incl symmetries="+seen.size());
         return primaryAlgs;
     }
     public static void main(String[] args) {
         N=5;
         K=36;
+        int[] szs={3,4};
         System.out.printf("N=%d,K=%d%n",N,K);
         st=System.currentTimeMillis();
         results=new HashMap<>();
-        results.put(4,new HashMap<>());
+        for (int sz:szs)
+            results.put(sz,new HashMap<>());
         syllLens=new int[K];
         ncalls=amt=0;
         rshift=new int[N]; cshift=new int[N];
         mark=mark0;
         stage=1;
         dfs(0,0,0,0);
-        System.out.printf(form,(System.currentTimeMillis()-st)/1000.0,ncalls,amt,results.get(4).size());
-        Set<String> algs=primaryAlgs(N,results.get(4).keySet());
-        System.out.println(algs);
-        System.out.println("num="+algs.size());
+        Map<Integer,Integer> sizes=new HashMap<>();
+        for (int sz:results.keySet()) sizes.put(sz,results.get(sz).size());
+        System.out.printf(form,(System.currentTimeMillis()-st)/1000.0,ncalls,amt,sizes);
+        for (int sz:results.keySet()) {
+            System.out.println("# cycled pieces="+sz);
+            Set<String> algs=primaryAlgs(N,results.get(sz).keySet());
+            System.out.println(algs);
+            System.out.println("num="+algs.size());
+        }
         System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
