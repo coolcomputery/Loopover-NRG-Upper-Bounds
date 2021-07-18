@@ -56,7 +56,7 @@ public class LoopoverNRGBFS {
     private int mvi(int code) {
         return data[code]==-1?-1:(int)((data[code]/ncombos)%M);
     }
-    public LoopoverNRGBFS(int R, int C, int gr, int gc, String state0, String state1, boolean strict) {
+    public LoopoverNRGBFS(int R, int C, int gr, int gc, String state0, String state1) {
         //RxC NRG Loopover, gripped piece at (gr,gc) when board is solved
         //constraints: if A=# free rows at start state and B=#free clms at start state, then (A>=2&&B>=3)||(A>=3&&B>=2) must be satisfied
         //strict: all scrambles must be solved with gripped piece moved to where it should be in the solved board
@@ -69,7 +69,7 @@ public class LoopoverNRGBFS {
                 for (int j=0; j<C; j++) tmp[i][j]=enstatemat[0][i]||enstatemat[1][j];
             enstatemat=tmp;
         }
-        System.out.println(R+"x"+C+": "+state0+" --> "+state1+" "+(strict?"strict":"nonstrict"));
+        System.out.println(R+"x"+C+": "+state0+" --> "+state1);
         long st=System.currentTimeMillis();
         rcfree=parse(state0);
         if (!free(gr,gc))
@@ -141,7 +141,7 @@ public class LoopoverNRGBFS {
             List<Integer> solvedcodes=new ArrayList<>();
             for (int grow=0; grow<R; grow++)
             for (int gclm=0; gclm<C; gclm++)
-            if (strict?(grow==gr&&gclm==gc):enstatemat[grow][gclm]) {
+            if (enstatemat[gr][gc]?enstatemat[grow][gclm]:(grow==gr&&gclm==gc)) {
                 int[] solvedscrm=new int[K];
                 solvedscrm[0]=tofree[grow*C+gclm];
                 for (int r=0, idx=1; r<R; r++)
@@ -275,7 +275,7 @@ public class LoopoverNRGBFS {
         long st=System.currentTimeMillis();
         String[] states={"11111x11111","11001x10011","11001x10001","11000x10000"};
         for (int i=0; i<states.length-1; i++)
-            System.out.println(new LoopoverNRGBFS(5,5,0,0,states[i],states[i+1],false).test());
+            System.out.println(new LoopoverNRGBFS(5,5,0,0,states[i],states[i+1]).test());
         System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
