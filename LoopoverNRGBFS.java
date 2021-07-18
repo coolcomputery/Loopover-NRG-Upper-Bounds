@@ -38,7 +38,7 @@ public class LoopoverNRGBFS {
     public int K;
     //BFS stuff
     private int M;
-    private int[][] mvactions, mvs;
+    private int[][] mvactions;
     public int ncombos;
     private long[] data;
     public List<int[]> fronts;
@@ -96,31 +96,33 @@ public class LoopoverNRGBFS {
             System.out.println();
         }
         M=2*R+2*C;
-        mvactions=new int[M][]; mvs=new int[M][]; {
+        mvactions=new int[M][]; {
             //mvactions[m][i]=free loc. that i-th free loc. will go to after the m-th move is applied
-            //mv [0,mr,s] --> idx=mr*2+(s+1)/2
             int idx=0;
             for (int mr=0; mr<R; mr++)
-            for (int s=-1; s<=1; s+=2) {
-                mvs[idx]=new int[] {0,mr,s};
-                mvactions[idx]=new int[Nfree];
-                for (int r=0; r<R; r++)
-                    for (int c=0; c<C; c++)
-                        if (free(r,c))
-                            mvactions[idx][tofree[r*C+c]]=tofree[r*C+(r==mr?mod(c+s,C):c)];
-                idx++;
-            }
-            //mv [1,mc,s] --> idx=2*R+mc*2+(s+1)/2
+                for (int s=-1; s<=1; s+=2) {
+                    if (rcfree[0][mr]) {
+                        mvactions[idx]=new int[Nfree];
+                        for (int r=0; r<R; r++)
+                            for (int c=0; c<C; c++)
+                                if (free(r,c))
+                                    mvactions[idx][tofree[r*C+c]]=tofree[r*C+(r==mr?mod(c+s,C):c)];
+                    }
+                    else mvactions[idx]=null;
+                    idx++;
+                }
             for (int mc=0; mc<C; mc++)
-            for (int s=-1; s<=1; s+=2) {
-                mvs[idx]=new int[] {1,mc,s};
-                mvactions[idx]=new int[Nfree];
-                for (int r=0; r<R; r++)
-                    for (int c=0; c<C; c++)
-                        if (free(r,c))
-                            mvactions[idx][tofree[r*C+c]]=tofree[(c==mc?mod(r+s,R):r)*C+c];
-                idx++;
-            }
+                for (int s=-1; s<=1; s+=2) {
+                    if (rcfree[1][mc]) {
+                        mvactions[idx]=new int[Nfree];
+                        for (int r=0; r<R; r++)
+                            for (int c=0; c<C; c++)
+                                if (free(r,c))
+                                    mvactions[idx][tofree[r*C+c]]=tofree[(c==mc?mod(r+s,R):r)*C+c];
+                    }
+                    else mvactions[idx]=null;
+                    idx++;
+                }
         }
         K=1; //include gripped piece
         for (int r=0; r<R; r++)
@@ -140,19 +142,19 @@ public class LoopoverNRGBFS {
         {
             List<Integer> solvedcodes=new ArrayList<>();
             for (int grow=0; grow<R; grow++)
-            for (int gclm=0; gclm<C; gclm++)
-            if (enstatemat[gr][gc]?enstatemat[grow][gclm]:(grow==gr&&gclm==gc)) {
-                int[] solvedscrm=new int[K];
-                solvedscrm[0]=tofree[grow*C+gclm];
-                for (int r=0, idx=1; r<R; r++)
-                    for (int c=0; c<C; c++)
-                        if (free(r,c)&&!enstatemat[r][c])
-                            solvedscrm[idx++]=tofree[r*C+c];
-                //System.out.println(Arrays.toString(solvedscrm));
-                int solvedscrmcode=comboCode(solvedscrm);
-                solvedcodes.add(solvedscrmcode);
-                data[solvedscrmcode]=0;
-            }
+                for (int gclm=0; gclm<C; gclm++)
+                    if (enstatemat[gr][gc]?enstatemat[grow][gclm]:(grow==gr&&gclm==gc)) {
+                        int[] solvedscrm=new int[K];
+                        solvedscrm[0]=tofree[grow*C+gclm];
+                        for (int r=0, idx=1; r<R; r++)
+                            for (int c=0; c<C; c++)
+                                if (free(r,c)&&!enstatemat[r][c])
+                                    solvedscrm[idx++]=tofree[r*C+c];
+                        //System.out.println(Arrays.toString(solvedscrm));
+                        int solvedscrmcode=comboCode(solvedscrm);
+                        solvedcodes.add(solvedscrmcode);
+                        data[solvedscrmcode]=0;
+                    }
             fronts.add(new int[solvedcodes.size()]);
             for (int i=0; i<fronts.get(0).length; i++)
                 fronts.get(0)[i]=solvedcodes.get(i);
@@ -166,18 +168,16 @@ public class LoopoverNRGBFS {
             for (int f:fronts.get(D)) {
                 int[] scrm=codeCombo(f);
                 int mr=freeto[scrm[0]]/C, mc=freeto[scrm[0]]%C;
-                int[] mvlist=rcfree[0][mr]?
-                                (rcfree[1][mc]?new int[] {mr*2,mr*2+1,2*R+mc*2,2*R+mc*2+1}:new int[] {mr*2,mr*2+1}):
-                        rcfree[1][mc]?new int[] {2*R+mc*2,2*R+mc*2+1}:new int[] {};
+                int[] mvlist=new int[] {mr*2,mr*2+1,2*R+mc*2,2*R+mc*2+1};
                 int invprevmv=D==0?-1:(mvi(f)^1);
                 for (int mi:mvlist)
-                if (mi!=invprevmv) {
-                    int nf=comboCode(scrm,mvactions[mi]);
-                    if (data[nf]==-1) {
-                        data[nf]=compressed(D+1,f,mi);
-                        nfront[sz++]=nf;
+                    if (mvactions[mi]!=null&&mi!=invprevmv) {
+                        int nf=comboCode(scrm,mvactions[mi]);
+                        if (data[nf]==-1) {
+                            data[nf]=compressed(D+1,f,mi);
+                            nfront[sz++]=nf;
+                        }
                     }
-                }
             }
             System.out.print((D>0?" ":"")+D+":"+fronts.get(D).length);
             fronts.add(new int[sz]);
@@ -243,33 +243,22 @@ public class LoopoverNRGBFS {
         System.arraycopy(P,Nfree-K,out,0,K);
         return out;
     }
-    public List<int[]> solvemvs(int code) {
-        List<int[]> out=new ArrayList<>();
+    public String solveseq(int code) {
+        if (data[code]==-1)
+            throw new RuntimeException("No solution.");
+        StringBuilder out=new StringBuilder();
         for (int c=code; depth(c)>0; c=par(c)) {
-            int[] mv=mvs[mvi(c)];
-            out.add(new int[] {mv[0],mv[1],-mv[2]});
+            int mi=mvi(c);
+            out.append(mi<2*R?(mi%2==0?"R":"L"):(mi%2==0?"D":"U"));
         }
-        return out;
-    }
-    public List<int[]> solvemvs(int[] scramble) {
-        return solvemvs(comboCode(scramble));
-    }
-    public static String mvseqStr(List<int[]> S) {
-        StringBuilder str=new StringBuilder();
-        for (int[] m:S)
-            str.append(m[0]==0?(m[2]==1?"R":"L"):(m[2]==1?"D":"U"));
-            //str.append(" ").append(m[0]==0?"R":"C").append(m[1]).append(m[2]==1?"":m[2]==-1?"'":("("+m[2]+")"));
-        return str.toString();
+        return out.toString();
     }
     public String test() {
-        int[] tscrm=new int[K];
-        for (int i=0; i<K; i++) tscrm[i]=i;
-        for (int i=0; i+1<K-1-(i+1); i++) {
-            int tmp=tscrm[i]; tscrm[i]=tscrm[K-1-i]; tscrm[K-1-i]=tmp;
-            tmp=tscrm[i+1]; tscrm[i+1]=tscrm[K-1-(i+1)]; tscrm[K-1-(i+1)]=tmp;
+        for (int code=0; code<ncombos; code++) if (data[code]!=-1) {
+            System.out.println("tscrm="+Arrays.toString(codeCombo(code)));
+            return solveseq(code);
         }
-        System.out.println("tscrm="+Arrays.toString(tscrm));
-        return mvseqStr(solvemvs(tscrm));
+        return null;
     }
     public static void main(String[] args) {
         long st=System.currentTimeMillis();
