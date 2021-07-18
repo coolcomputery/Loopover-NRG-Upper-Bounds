@@ -1,4 +1,3 @@
-import java.lang.reflect.Array;
 import java.util.*;
 /**
  * consider a NxN NRG Loopover board with a binary matrix A
@@ -48,8 +47,8 @@ public class LoopoverNRGDijkstra {
     public int K;
     //BFS stuff
     public int ncombos;
-    private int[] depth, par;
-    private String[] step;
+    private LoopoverNRGSetup[] bfss;
+    private int[] depth, par, tuplecode;
     public int diam;
     public LoopoverNRGDijkstra(int gr, int gc, String A, String B) {
         this(gr,gc,tobmat(A.split(",")),tobmat(B.split(",")));
@@ -65,6 +64,9 @@ public class LoopoverNRGDijkstra {
         if (!A[gr][gc]) throw new RuntimeException("Gripped pieces locked at starting state.");
         for (int r=0; r<R; r++) for (int c=0; c<C; c++)
             if (!A[r][c]&&B[r][c]) throw new RuntimeException("Set of solved pieces in A does not subset set of solved pieces in B.");
+        boolean[] rfree=new boolean[R], cfree=new boolean[C];
+        Arrays.fill(rfree,true); Arrays.fill(cfree,true);
+        for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (!A[r][c]) rfree[r]=cfree[c]=false;
         F=0; tofree=new int[R*C]; freeto=new int[R*C];
         for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (A[r][c]) {
             tofree[r*C+c]=F;
@@ -85,9 +87,6 @@ public class LoopoverNRGDijkstra {
                 );
             System.out.println();
         }
-        boolean[] rfree=new boolean[R], cfree=new boolean[C];
-        Arrays.fill(rfree,true); Arrays.fill(cfree,true);
-        for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (!A[r][c]) rfree[r]=cfree[c]=false;
         int M=2*R+2*C;
         int[][] mvactions=new int[M][]; {
             //mvactions[m][i]=free loc. that i-th free loc. will go to after the m-th move is applied
@@ -122,29 +121,63 @@ public class LoopoverNRGDijkstra {
         if (tmp>400_000_000) throw new RuntimeException("Too many combos: "+tmp);
         ncombos=(int)tmp;
         System.out.println("ncombos="+ncombos);
-        depth=new int[ncombos]; Arrays.fill(depth,Integer.MAX_VALUE); par=new int[ncombos]; step=new String[ncombos];
-        List<List<Integer>> fronts=new ArrayList<>(); fronts.add(new ArrayList<>());
-        for (int gl=0; gl<R*C; gl++)
-            if (B[gr][gc]?(B[gl/C][gl%C]):(gl==gr*C+gc)) {
-                int[] solvedscrm=new int[R*C]; solvedscrm[0]=tofree[gl];
-                for (int r=0, i=1; r<R; r++) for (int c=0; c<C; c++) if ((r!=gr||c!=gc)&&A[r][c]&&!B[r][c])
-                    solvedscrm[i++]=tofree[r*C+c];
-                solvedscrm=Arrays.copyOfRange(solvedscrm,0,K);
-                System.out.println(Arrays.toString(solvedscrm));
-                int solvedcode=comboCode(solvedscrm);
-                fronts.get(0).add(solvedcode);
-                depth[solvedcode]=0; par[solvedcode]=-1; step[solvedcode]=null;
-            }
-        boolean[] visited=new boolean[ncombos];
+        depth=new int[ncombos]; Arrays.fill(depth,Integer.MAX_VALUE); par=new int[ncombos]; tuplecode=new int[ncombos];
+        System.out.print("list of allowed positions for gripped piece after solving:"); {
+            //gripped piece must be in a position after solving that is reachable to home position under state B
+            boolean[] Brf=new boolean[R], Bcf=new boolean[C]; Arrays.fill(Brf,true); Arrays.fill(Bcf,true);
+            for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (!B[r][c]) Brf[r]=Bcf[c]=false;
+            for (int gl=0; gl<R*C; gl++)
+                if ((B[gr][gc]&&(Brf[gl/C]||Bcf[gl%C]))||gl==gr*C+gc) {
+                    int[] solvedscrm=new int[K]; solvedscrm[0]=tofree[gl];
+                    for (int r=0, i=1; r<R; r++) for (int c=0; c<C; c++) if ((r!=gr||c!=gc)&&A[r][c]&&!B[r][c])
+                        solvedscrm[i++]=tofree[r*C+c];
+                    System.out.print(" "+solvedscrm[0]);
+                    int solvedcode=comboCode(solvedscrm);
+                    depth[solvedcode]=0; par[solvedcode]=-1;
+                }
+        } System.out.println();
         int reached=0;
-        if (bfss==null) bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3bfs(R), LoopoverNRGSetup.swap22bfs(R)};
+        if (bfss==null) bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3(R), LoopoverNRGSetup.cyc2n2(R)};
+        this.bfss=bfss;
+        List<List<int[][]>> cycleInfos=new ArrayList<>();
+        for (int bfsi=0; bfsi<bfss.length; bfsi++)
+        if (bfss[bfsi]==null) cycleInfos.add(null);
+        else {
+            cycleInfos.add(new ArrayList<>());
+            LoopoverNRGSetup bfs=bfss[bfsi];
+            int nP=bfs.tP.length;
+            int[] tuple=new int[nP];
+            //we want to cycle the pieces at locations freeto[tuple[i]]
+            while (tuple[nP-1]<F) {
+                boolean good=true;
+                for (int i=0; i<nP; i++)
+                    for (int j=0; j<i; j++)
+                        if (tuple[i]==tuple[j]) good=false;
+                if (good) {
+                    int[] L=new int[nP];
+                    for (int i=0; i<nP; i++)
+                        L[i]=freeto[tuple[i]];
+                    int[] action=new int[F];
+                    for (int i=0; i<F; i++) action[i]=i;
+                    for (int i=0; i<nP; i++) action[tofree[L[i]]]=tofree[L[bfs.tP[i]]];
+                    cycleInfos.get(bfsi).add(new int[][] {L,action});
+                }
+                tuple[0]++;
+                for (int i=0; i<nP-1&&tuple[i]==F; i++) {
+                    tuple[i]=0;
+                    tuple[i+1]++;
+                }
+            }
+        }
         diam=0;
-        for (int D=0; D<fronts.size(); D++)
-        if (fronts.get(D)!=null&&fronts.get(D).size()>0) {
+        for (int D=0;; D++) {
+            boolean finished=true;
             int fsz=0;
-            for (int f:fronts.get(D)) if (!visited[f]) {
+            for (int f=0; f<ncombos; f++)
+            if (depth[f]>D&&depth[f]!=Integer.MAX_VALUE) finished=false;
+            else if (depth[f]==D) {
                 fsz++;
-                visited[f]=true;
+                finished=false;
                 int[] scrm=codeCombo(f);
                 int lr=freeto[scrm[0]]/C, lc=freeto[scrm[0]]%C;
                 int[] mvis={lr*2,lr*2+1,2*R+lc*2,2*R+lc*2+1};
@@ -154,45 +187,20 @@ public class LoopoverNRGDijkstra {
                     if (ndepth<depth[nf]) {
                         depth[nf]=ndepth;
                         par[nf]=f;
-                        step[nf]=mvi<2*R?(mvi%2==0?"L":"R"):(mvi%2==0?"U":"D");
-                        while (ndepth>=fronts.size()) fronts.add(null);
-                        if (fronts.get(ndepth)==null) fronts.set(ndepth,new ArrayList<>());
-                        fronts.get(ndepth).add(nf);
+                        tuplecode[nf]=(mvi<2*R?(mvi%2==0?0:1):(mvi%2==0?2:3))*(bfss.length+1);
                     }
                 }
-                for (LoopoverNRGSetup bfs:bfss) if (bfs!=null) {
-                    int nP=bfs.tP.length;
-                    int[] tuple=new int[nP];
-                    //we want to cycle the pieces at locations freeto[tuple[i]]
-                    while (tuple[nP-1]<F) {
-                        boolean good=true;
-                        for (int i=0; i<nP; i++) {
-                            for (int j=0; j<i; j++)
-                                if (tuple[i]==tuple[j]) good=false;
-                            if (tuple[i]==scrm[0]) good=false;
-                        }
-                        if (good) {
-                            int[] L=new int[nP];
-                            for (int i=0; i<nP; i++)
-                                L[i]=freeto[tuple[i]];
-                            int[] action=new int[F];
-                            for (int i=0; i<F; i++) action[i]=i;
-                            for (int i=0; i<nP; i++) action[tofree[L[i]]]=tofree[L[bfs.tP[i]]];
-                            int nf=comboCode(scrm,action);
-                            int ndepth=depth[f]+bfs.cost(L,lr,lc);
-                            if (ndepth<depth[nf]) {
-                                depth[nf]=ndepth;
-                                par[nf]=f;
-                                step[nf]=bfs.sol(L,lr,lc);
-                                while (ndepth>=fronts.size()) fronts.add(null);
-                                if (fronts.get(ndepth)==null) fronts.set(ndepth,new ArrayList<>());
-                                fronts.get(ndepth).add(nf);
-                            }
-                        }
-                        tuple[0]++;
-                        for (int i=0; i<nP-1&&tuple[i]==F; i++) {
-                            tuple[i]=0;
-                            tuple[i+1]++;
+                for (int bfsi=0; bfsi<bfss.length; bfsi++) if (bfss[bfsi]!=null) {
+                    LoopoverNRGSetup bfs=bfss[bfsi];
+                    for (int[][] cycinfo:cycleInfos.get(bfsi)) if (cycinfo[1][scrm[0]]==scrm[0]) {
+                        int[] L=cycinfo[0], action=cycinfo[1];
+                        int nf=comboCode(scrm,action);
+                        int tcode=bfs.tupleCode(L,lr,lc);
+                        int ndepth=depth[f]+bfs.cost(tcode);
+                        if (ndepth<depth[nf]) {
+                            depth[nf]=ndepth;
+                            par[nf]=f;
+                            tuplecode[nf]=tcode*(bfss.length+1)+bfsi+1;
                         }
                     }
                 }
@@ -202,9 +210,10 @@ public class LoopoverNRGDijkstra {
                 diam=Math.max(diam,D);
             }
             reached+=fsz;
+            if (finished) break;
         }
         System.out.println("# combos reached="+reached);
-        if (reached!=ncombos) System.out.println("Warning: ncombos="+ncombos+"!=reached="+reached+" (could be the result of parity restriction).");
+        if (reached!=ncombos) System.out.println("Warning: ncombos="+ncombos+"!=reached="+reached+" (could be the result of a restriction on parity or reachable locations of the gripped piece).");
         System.out.println("diameter="+diam);
         System.out.println("BFS time (ms)="+(System.currentTimeMillis()-st));
     }
@@ -258,8 +267,14 @@ public class LoopoverNRGDijkstra {
         if (depth[code]==Integer.MAX_VALUE)
             throw new RuntimeException("No solution.");
         StringBuilder out=new StringBuilder();
-        for (int c=code; depth[c]>0; c=par[c])
-            out.append(inv(step[c])).append(" ");
+        for (int c=code; depth[c]>0; c=par[c]) {
+            int i=tuplecode[c];
+            int bfsi=i%(bfss.length+1)-1; i/=bfss.length+1;
+            out.append(inv(
+                    bfsi==-1?(new String[] {"L","R","U","D"}[i]):
+                            bfss[bfsi].sol(i)
+            )).append(" ");
+        }
         return out.toString();
     }
     public String test() {
@@ -270,12 +285,15 @@ public class LoopoverNRGDijkstra {
         return null;
     }
     public static void main(String[] args) {
+        //TODO: SPEED OPTIMIZATIONS
+        int N=5;
+        LoopoverNRGSetup[] bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3(N), LoopoverNRGSetup.cyc2n2(N)};
         String[] states={
                 "11111,11111,10000,10000,10000",
                 "11011,11000,10000,10000,10000",
                 "00000,00000,00000,00000,00000",
         };
         for (int i=0; i<states.length-1; i++)
-            System.out.println(new LoopoverNRGDijkstra(0,0,states[i],states[i+1]).test());
+            System.out.println(new LoopoverNRGDijkstra(0,0,tobmat(states[i].split(",")),tobmat(states[i+1].split(",")),bfss).test());
     }
 }
