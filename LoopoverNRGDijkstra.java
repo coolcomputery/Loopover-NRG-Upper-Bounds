@@ -33,15 +33,15 @@ public class LoopoverNRGDijkstra {
     public static boolean[][] tobmat(String[] rows) {
         boolean[][] out=new boolean[rows.length][rows[0].length()];
         for (int i=0; i<out.length; i++)
-        for (int j=0; j<rows[i].length(); j++) {
-            char c=rows[i].charAt(j);
-            if (c=='0') out[i][j]=false;
-            else if (c=='1') out[i][j]=true;
-            else throw new RuntimeException("Not parseable as a binary matrix.");
-        }
+            for (int j=0; j<rows[i].length(); j++) {
+                char c=rows[i].charAt(j);
+                if (c=='0') out[i][j]=false;
+                else if (c=='1') out[i][j]=true;
+                else throw new RuntimeException("Not parseable as a binary matrix.");
+            }
         return out;
     }
-    private int R, C;
+    private int R, C, grippedPc;
     private int F; //F=number of locations that are not locked
     private int[] tofree, freeto; //freeto[f]=l=location of the f-th unlocked location; tofree[l]=f
     public int K;
@@ -53,12 +53,15 @@ public class LoopoverNRGDijkstra {
     public LoopoverNRGDijkstra(int gr, int gc, String A, String B) {
         this(gr,gc,tobmat(A.split(",")),tobmat(B.split(",")));
     }
+    public LoopoverNRGDijkstra(int gr, int gc, String A, String B, LoopoverNRGSetup[] bfss) {
+        this(gr,gc,tobmat(A.split(",")),tobmat(B.split(",")),bfss);
+    }
     private LoopoverNRGDijkstra(int gr, int gc, boolean[][] A, boolean[][] B) {
         this(gr,gc,A,B,null);
     }
     private LoopoverNRGDijkstra(int gr, int gc, boolean[][] A, boolean[][] B, LoopoverNRGSetup[] bfss) {
         long st=System.currentTimeMillis();
-        R=A.length; C=A[0].length;
+        R=A.length; C=A[0].length; grippedPc=gr*C+gc;
         if (R!=C) throw new RuntimeException("Only square board sizes allowed."); //need to refactor LoopoverNRGSetup before I can remove this constraint
         if (R!=B.length||C!=B[0].length) throw new RuntimeException("Mismatch in dimensions.");
         if (!A[gr][gc]) throw new RuntimeException("Gripped pieces locked at starting state.");
@@ -77,7 +80,7 @@ public class LoopoverNRGDijkstra {
         for (int r=0; r<R; r++) {
             for (int c=0; c<C; c++)
                 System.out.printf("%4s",
-                                A[r][c]?
+                        A[r][c]?
                                 ((B[r][c]?(r==gr&&c==gc?"g":""):(r==gr&&c==gc?"G":"'")))+tofree[r*C+c]
                                 :"X"
                         //X: locked
@@ -141,78 +144,78 @@ public class LoopoverNRGDijkstra {
         this.bfss=bfss;
         List<List<int[][]>> cycleInfos=new ArrayList<>();
         for (int bfsi=0; bfsi<bfss.length; bfsi++)
-        if (bfss[bfsi]==null) cycleInfos.add(null);
-        else {
-            cycleInfos.add(new ArrayList<>());
-            LoopoverNRGSetup bfs=bfss[bfsi];
-            int nP=bfs.tP.length;
-            int[] tuple=new int[nP];
-            //we want to cycle the pieces at locations freeto[tuple[i]]
-            while (tuple[nP-1]<F) {
-                boolean good=true;
-                for (int i=0; i<nP; i++)
-                    for (int j=0; j<i; j++)
-                        if (tuple[i]==tuple[j]) good=false;
-                if (good) {
-                    int[] L=new int[nP];
+            if (bfss[bfsi]==null) cycleInfos.add(null);
+            else {
+                cycleInfos.add(new ArrayList<>());
+                LoopoverNRGSetup bfs=bfss[bfsi];
+                int nP=bfs.tP.length;
+                int[] tuple=new int[nP];
+                //we want to cycle the pieces at locations freeto[tuple[i]]
+                while (tuple[nP-1]<F) {
+                    boolean good=true;
                     for (int i=0; i<nP; i++)
-                        L[i]=freeto[tuple[i]];
-                    int[] action=new int[F];
-                    for (int i=0; i<F; i++) action[i]=i;
-                    for (int i=0; i<nP; i++) action[tofree[L[i]]]=tofree[L[bfs.tP[i]]];
-                    cycleInfos.get(bfsi).add(new int[][] {L,action});
-                }
-                tuple[0]++;
-                for (int i=0; i<nP-1&&tuple[i]==F; i++) {
-                    tuple[i]=0;
-                    tuple[i+1]++;
+                        for (int j=0; j<i; j++)
+                            if (tuple[i]==tuple[j]) good=false;
+                    if (good) {
+                        int[] L=new int[nP];
+                        for (int i=0; i<nP; i++)
+                            L[i]=freeto[tuple[i]];
+                        int[] action=new int[F];
+                        for (int i=0; i<F; i++) action[i]=i;
+                        for (int i=0; i<nP; i++) action[tofree[L[i]]]=tofree[L[bfs.tP[i]]];
+                        cycleInfos.get(bfsi).add(new int[][] {L,action});
+                    }
+                    tuple[0]++;
+                    for (int i=0; i<nP-1&&tuple[i]==F; i++) {
+                        tuple[i]=0;
+                        tuple[i+1]++;
+                    }
                 }
             }
-        }
         diam=0;
         for (int D=0;; D++) {
             boolean finished=true;
             int fsz=0;
             for (int f=0; f<ncombos; f++)
-            if (depth[f]>D&&depth[f]!=Integer.MAX_VALUE) finished=false;
-            else if (depth[f]==D) {
-                fsz++;
-                finished=false;
-                int[] scrm=codeCombo(f);
-                int lr=freeto[scrm[0]]/C, lc=freeto[scrm[0]]%C;
-                int[] mvis={lr*2,lr*2+1,2*R+lc*2,2*R+lc*2+1};
-                for (int mvi:mvis) if (mvactions[mvi]!=null) {
-                    int nf=comboCode(scrm,mvactions[mvi]);
-                    int ndepth=depth[f]+1;
-                    if (ndepth<depth[nf]) {
-                        depth[nf]=ndepth;
-                        par[nf]=f;
-                        tuplecode[nf]=(mvi<2*R?(mvi%2==0?0:1):(mvi%2==0?2:3))*(bfss.length+1);
-                    }
-                }
-                for (int bfsi=0; bfsi<bfss.length; bfsi++) if (bfss[bfsi]!=null) {
-                    LoopoverNRGSetup bfs=bfss[bfsi];
-                    for (int[][] cycinfo:cycleInfos.get(bfsi)) if (cycinfo[1][scrm[0]]==scrm[0]) {
-                        int[] L=cycinfo[0], action=cycinfo[1];
-                        int nf=comboCode(scrm,action);
-                        int tcode=bfs.tupleCode(L,lr,lc);
-                        int ndepth=depth[f]+bfs.cost(tcode);
+                if (depth[f]>D&&depth[f]!=Integer.MAX_VALUE) finished=false;
+                else if (depth[f]==D) {
+                    fsz++;
+                    finished=false;
+                    int[] scrm=codeCombo(f);
+                    int lr=freeto[scrm[0]]/C, lc=freeto[scrm[0]]%C;
+                    int[] mvis={lr*2,lr*2+1,2*R+lc*2,2*R+lc*2+1};
+                    for (int mvi:mvis) if (mvactions[mvi]!=null) {
+                        int nf=comboCode(scrm,mvactions[mvi]);
+                        int ndepth=depth[f]+1;
                         if (ndepth<depth[nf]) {
                             depth[nf]=ndepth;
                             par[nf]=f;
-                            tuplecode[nf]=tcode*(bfss.length+1)+bfsi+1;
+                            tuplecode[nf]=(mvi<2*R?(mvi%2==0?0:1):(mvi%2==0?2:3))*(bfss.length+1);
+                        }
+                    }
+                    for (int bfsi=0; bfsi<bfss.length; bfsi++) if (bfss[bfsi]!=null) {
+                        LoopoverNRGSetup bfs=bfss[bfsi];
+                        for (int[][] cycinfo:cycleInfos.get(bfsi)) if (cycinfo[1][scrm[0]]==scrm[0]) {
+                            int[] L=cycinfo[0], action=cycinfo[1];
+                            int nf=comboCode(scrm,action);
+                            int tcode=bfs.tupleCode(L,lr,lc);
+                            int ndepth=depth[f]+bfs.cost(tcode);
+                            if (ndepth<depth[nf]) {
+                                depth[nf]=ndepth;
+                                par[nf]=f;
+                                tuplecode[nf]=tcode*(bfss.length+1)+bfsi+1;
+                            }
                         }
                     }
                 }
-            }
             if (fsz>0) {
-                System.out.println(D+":"+fsz);
+                System.out.print((D>0?" ":"")+D+":"+fsz);
                 diam=Math.max(diam,D);
             }
             reached+=fsz;
             if (finished) break;
         }
-        System.out.println("# combos reached="+reached);
+        System.out.println("\n# combos reached="+reached);
         if (reached!=ncombos) System.out.println("Warning: ncombos="+ncombos+"!=reached="+reached+" (could be the result of a restriction on parity or reachable locations of the gripped piece).");
         System.out.println("diameter="+diam);
         System.out.println("BFS time (ms)="+(System.currentTimeMillis()-st));
@@ -279,21 +282,37 @@ public class LoopoverNRGDijkstra {
     }
     public String test() {
         for (int code=0; code<ncombos; code++) if (depth[code]!=Integer.MAX_VALUE) {
-            System.out.println("tscrm="+Arrays.toString(codeCombo(code)));
+            int[] scrm=codeCombo(code);
+            System.out.println("tscrm="+Arrays.toString(scrm));
+            int[] targets=null;
+            for (int c=0; c<ncombos; c++) if (depth[c]==0) {
+                int[] t=codeCombo(c);
+                if (freeto[t[0]]==grippedPc) {
+                    targets=t;
+                    break;
+                }
+            }
+            int[] board=new int[R*C]; Arrays.fill(board,-1);
+            for (int k=0; k<K; k++)
+                board[freeto[scrm[k]]]=freeto[targets[k]];
+            System.out.println("test scramble to solve");
+            for (int r=0; r<R; r++) {
+                for (int c=0; c<C; c++) {
+                    int pc=board[r*C+c];
+                    System.out.print(pc==-1?".":(char)('A'+pc));
+                }
+                System.out.println();
+            }
             return solveseq(code);
         }
         return null;
     }
     public static void main(String[] args) {
-        //TODO: SPEED OPTIMIZATIONS
         int N=5;
         LoopoverNRGSetup[] bfss=new LoopoverNRGSetup[] {LoopoverNRGSetup.cyc3(N), LoopoverNRGSetup.cyc2n2(N)};
-        String[] states={
-                "11111,11111,10000,10000,10000",
-                "11011,11000,10000,10000,10000",
-                "00000,00000,00000,00000,00000",
-        };
-        for (int i=0; i<states.length-1; i++)
-            System.out.println(new LoopoverNRGDijkstra(0,0,tobmat(states[i].split(",")),tobmat(states[i+1].split(",")),bfss).test());
+        for (LoopoverNRGSetup bfs:bfss) LoopoverNRGSetup.verify(bfs);
+        boolean[][] state0=tobmat("00000,01110,01110,01110,00000".split(",")),
+                state1=tobmat("00000,00000,00000,00000,00000".split(","));
+        System.out.println(new LoopoverNRGDijkstra(2,2,state0,state1,bfss).test());
     }
 }
