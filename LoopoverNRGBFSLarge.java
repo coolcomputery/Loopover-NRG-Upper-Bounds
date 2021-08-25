@@ -58,7 +58,8 @@ public class LoopoverNRGBFSLarge {
     private String folder;
     private int R, C, gr, gc;
     private int F;
-    private boolean[][] rcfree, enstatemat;
+    private boolean[][] rcfree, nfree;
+    private boolean strict;
     private boolean free(int r, int c) {
         return rcfree[0][r]||rcfree[1][c];
     }
@@ -71,143 +72,154 @@ public class LoopoverNRGBFSLarge {
     //bfs stuff
     private long[] visited;
     public int D;
-    private int codelen, mvilen;
     private void add(long n) {
         visited[(int)(n/64)]|=1L<<(n%64);
     }
     private boolean contains(long n) {
         return (visited[(int)(n/64)]&(1L<<(n%64)))!=0;
     }
-    public LoopoverNRGBFSLarge(int R, int C, int gr, int gc, String state0, String state1) {
-        folder=R+"x"+C+"NRG("+gr+","+gc+")-"+state0+"-"+state1+"\\";
+    public LoopoverNRGBFSLarge(int R, int C, int gr, int gc, String state0, String state1, boolean strict) {
+        folder=R+"x"+C+"NRG("+gr+","+gc+")-"+state0+"-"+state1+(strict?" STRICT":"")+"/";
         System.out.println(folder);
         new File(folder).mkdir();
-        this.R=R; this.C=C; this.gr=gr; this.gc=gc;
+        this.R=R; this.C=C; this.gr=gr; this.gc=gc; this.strict=strict;
+        nfree=parse(state1);
+        if (state1.indexOf('x')!=-1) {
+            boolean[][] tmp=new boolean[R][C];
+            for (int i=0; i<R; i++)
+                for (int j=0; j<C; j++) tmp[i][j]=nfree[0][i]||nfree[1][j];
+            nfree=tmp;
+        }
         rcfree=parse(state0);
-        tofree=new int[R*C]; freeto=new int[R*C];
-        F=0;
+        if (!free(gr,gc))
+            throw new RuntimeException("Gripped piece is locked.");
+        tofree=new int[R*C]; freeto=new int[R*C]; F=0;
         for (int r=0; r<R; r++)
             for (int c=0; c<C; c++)
                 if (free(r,c)) {
-                    tofree[r*C+c]= F;
+                    tofree[r*C+c]=F;
                     freeto[F]=r*C+c;
                     F++;
                 }
                 else tofree[r*C+c]=-1;
-        enstatemat=parse(state1);
-        if (state1.indexOf('x')!=-1) {
-            boolean[][] tmp=new boolean[R][C];
-            for (int i=0; i<R; i++)
-                for (int j=0; j<C; j++) tmp[i][j]=enstatemat[0][i]||enstatemat[1][j];
-            enstatemat=tmp;
-        }
+        freeto=Arrays.copyOfRange(freeto,0,F);
         for (int r=0; r<R; r++) {
             for (int c=0; c<C; c++)
                 System.out.printf("%4s",
                         free(r,c)?
-                                ((r==gr&&c==gc?"*":(enstatemat[r][c]?"":"'"))
+                                ((r==gr&&c==gc?"*":(nfree[r][c]?"":"'"))
                                         +tofree[r*C+c])
                                 :"X"
                         //X: locked; ': piece that this BFS tree tries to solve; *: gripped piece
                 );
             System.out.println();
         }
-        K=1; //include gripped piece
-        for (int r=0; r<R; r++)
-            for (int c=0; c<C; c++)
-                if (free(r,c)&&!enstatemat[r][c])
-                    K++;
-        ncombos=1;
-        for (int rep=0; rep<K; rep++) ncombos*=F-rep;
-        System.out.println("ncombos="+ncombos);
-        if (ncombos/64>400_000_000) throw new RuntimeException("Too many combinations to handle.");
-        codelen=bb95(ncombos).length();
-        System.out.println("every combo represented with "+ codelen +" character(s)");
-        M=2*R+2*C;
         M=2*R+2*C;
         mvactions=new int[M][]; {
             //mvactions[m][i]=free loc. that i-th free loc. will go to after the m-th move is applied
-            //mv [0,mr,s] --> idx=mr*2+(s+1)/2
             int idx=0;
             for (int mr=0; mr<R; mr++)
                 for (int s=-1; s<=1; s+=2) {
                     if (rcfree[0][mr]) {
                         mvactions[idx]=new int[F];
-                        for (int r=0; r<R; r++)
-                            for (int c=0; c<C; c++)
-                                if (free(r,c))
-                                    mvactions[idx][tofree[r*C+c]]=tofree[r*C+(r==mr?mod(c+s,C):c)];
+                        for (int i=0; i<F; i++) {
+                            int r=freeto[i]/C, c=freeto[i]%C;
+                            mvactions[idx][i]=tofree[r*C+(r==mr?mod(c+s,C):c)];
+                        }
                     }
                     else mvactions[idx]=null;
                     idx++;
                 }
-            //mv [1,mc,s] --> idx=2*R+mc*2+(s+1)/2
             for (int mc=0; mc<C; mc++)
                 for (int s=-1; s<=1; s+=2) {
                     if (rcfree[1][mc]) {
                         mvactions[idx]=new int[F];
-                        for (int r=0; r<R; r++)
-                            for (int c=0; c<C; c++)
-                                if (free(r,c))
-                                    mvactions[idx][tofree[r*C+c]]=tofree[(c==mc?mod(r+s,R):r)*C+c];
+                        for (int i=0; i<F; i++) {
+                            int r=freeto[i]/C, c=freeto[i]%C;
+                            mvactions[idx][i]=tofree[(c==mc?mod(r+s,R):r)*C+c];
+                        }
                     }
                     else mvactions[idx]=null;
                     idx++;
                 }
         }
-        mvilen=bb95(M).length();
-        System.out.println("every final move represented with "+mvilen+" character(s)");
+        K=0;
+        for (int r=0; r<R; r++) for (int c=0; c<C; c++)
+            if ((free(r,c)&&!nfree[r][c])||(r==gr&&c==gc)) //include gripped piece
+                K++;
     }
     public void bfs() throws IOException {
+        long st=System.currentTimeMillis();
+        ncombos=1;
+        for (int rep=0; rep<K; rep++) ncombos*=F-rep;
+        System.out.println("ncombos="+ncombos);
+        if (ncombos/64>400_000_000) throw new RuntimeException("Too many combinations to handle.");
         visited=new long[(int)(ncombos/64+1)];
-        PrintWriter fout=new PrintWriter(new FileWriter(folder+"0.txt")); {
-            for (int grow=0; grow<R; grow++)
-                for (int gclm=0; gclm<C; gclm++)
-                    if (enstatemat[gr][gc]?enstatemat[grow][gclm]:(grow==gr&&gclm==gc)) {
-                        int[] solvedscrm=new int[K];
-                        solvedscrm[0]=tofree[grow*C+gclm];
-                        for (int r=0, idx=1; r<R; r++)
-                            for (int c=0; c<C; c++)
-                                if (free(r,c)&&!enstatemat[r][c])
-                                    solvedscrm[idx++]=tofree[r*C+c];
-                        System.out.println(Arrays.toString(solvedscrm));
-                        long solvedscrmcode=comboCode(solvedscrm);
-                        add(solvedscrmcode);
-                        fout.print(bb95j(solvedscrmcode,codelen).append(bb95j(0,mvilen)));
-                    }
+        int chunk=bb95(ncombos*M).length();
+        System.out.println("every combo represented with "+chunk+" character(s)");
+        {
+            PrintWriter fout=new PrintWriter(new FileWriter(folder+"0.txt"));
+            int[] target=new int[K-1];
+            for (int r=0, idx=0; r<R; r++) for (int c=0; c<C; c++)
+                if ((free(r,c)&&!nfree[r][c])&&!(r==gr&&c==gc))
+                    target[idx++]=tofree[r*C+c];
+            boolean[] rnfree=new boolean[R], cnfree=new boolean[C];
+            Arrays.fill(rnfree,true); Arrays.fill(cnfree,true);
+            for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (!nfree[r][c]) rnfree[r]=cnfree[c]=false;
+            boolean existsrfree=false, existscfree=false;
+            for (boolean v:rnfree) if (v) existsrfree=true;
+            for (boolean v:cnfree) if (v) existscfree=true;
+            System.out.println("allowed final locations of gripped piece (marked with *):");
+            List<Integer> grEnds=new ArrayList<>();
+            for (int grow=0; grow<R; grow++) {
+                for (int gclm=0; gclm<C; gclm++) {
+                    boolean good=strict?(grow==gr&&gclm==gc):
+                            (nfree[gr][gc]?
+                                    (existsrfree&&existscfree?(rnfree[grow]||cnfree[gclm]):
+                                            ((gclm==gc||rnfree[gr])&&(grow==gr||cnfree[gc]))):
+                                    (grow==gr&&gclm==gc));
+                    if (good)
+                        grEnds.add(grow*C+gclm);
+                    System.out.print(!free(grow,gclm)?"X":
+                            good?"*":".");
+                }
+                System.out.println();
+            }
+            for (int gloc:grEnds) {
+                int[] solvedscrm=new int[K]; solvedscrm[0]=tofree[gloc];
+                System.arraycopy(target,0,solvedscrm,1,K-1);
+                long solvedscrmcode=comboCode(solvedscrm);
+                add(solvedscrmcode);
+                fout.print(bb95j(solvedscrmcode*M, chunk));
+            }
             fout.close();
         }
         int reached=0;
         for (D=0;; D++) {
             BufferedReader fin=new BufferedReader(new FileReader(folder+D+".txt"));
-            fout=new PrintWriter(new FileWriter(folder+(D+1)+".txt"));
+            PrintWriter fout=new PrintWriter(new FileWriter(folder+(D+1)+".txt"));
             StringBuilder toPrint=new StringBuilder();
             long fsz=0, sz=0;
             while (true) {
-                StringBuilder code=new StringBuilder();
-                for (int i=0; i<codelen; i++) {
+                StringBuilder info=new StringBuilder();
+                for (int i = 0; i< chunk; i++) {
                     int r=fin.read();
                     if (r==-1) break;
-                    code.append((char)r);
+                    info.append((char)r);
                 }
-                if (code.length()==0) break;
-                if (code.length()!=codelen) throw new RuntimeException("\""+code+"\".length()!="+codelen);
+                if (info.length()==0) break;
+                if (info.length()!=chunk) throw new RuntimeException("\""+info+"\".length()!="+ chunk);
                 fsz++;
-                long f=num(code.toString());
-                int[] scrm=codeCombo(f);
-                //if (D==0) System.out.println("-->"+Arrays.toString(scrm));
-                StringBuilder mvibb95=new StringBuilder();
-                for (int i=0; i<mvilen; i++)
-                    mvibb95.append((char)fin.read());
+                long fm=num(info.toString()); int[] scrm=codeCombo(fm/M); int mvi=(int)(fm%M);
                 int mr=freeto[scrm[0]]/C, mc=freeto[scrm[0]]%C;
                 int[] mvlist=new int[] {mr*2,mr*2+1,2*R+mc*2,2*R+mc*2+1};
-                int invprevmv=D==0?-1:((int)num(mvibb95.toString())^1);
+                int invprevmv=D==0?-1:(mvi^1);
                 for (int mi:mvlist)
                     if (mvactions[mi]!=null&&mi!=invprevmv) {
                         long nf=comboCode(scrm,mvactions[mi]);
                         if (!contains(nf)) {
                             add(nf);
-                            toPrint.append(bb95j(nf,codelen)).append(bb95j(mi,mvilen));
+                            toPrint.append(bb95j(nf*M+mi,chunk));
                             sz++;
                             if (sz%1000_000==0) {
                                 fout.print(toPrint);
@@ -226,6 +238,7 @@ public class LoopoverNRGBFSLarge {
         if (reached!=ncombos)
             System.out.printf("WARNING: reached=%d!=ncombos=%d%n",reached,ncombos);
         System.out.println("D="+D);
+        System.out.println("total time="+(System.currentTimeMillis()-st));
     }
     private long comboCode(int[] A) {
         int[] P=new int[F];
@@ -275,7 +288,9 @@ public class LoopoverNRGBFSLarge {
     }
     public static void main(String[] args) throws IOException {
         long st=System.currentTimeMillis();
-        new LoopoverNRGBFSLarge(5,5,0,0,"11111x11111","11001x10001").bfs();
+        new LoopoverNRGBFSLarge(5,5,2,2,"01110x01110","01110x00010",false).bfs();
+        new LoopoverNRGBFSLarge(5,5,2,2,"01110x01110","01110x00010",true).bfs();
+        new LoopoverNRGBFSLarge(5,5,2,2,"01110x01110","01110x00000",true).bfs();
         System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
