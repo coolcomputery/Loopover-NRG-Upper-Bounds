@@ -143,7 +143,7 @@ public class LoopoverNRGBFS {
             int[] target=new int[K-1];
             for (int r=0, idx=0; r<R; r++) for (int c=0; c<C; c++)
                 if ((free(r,c)&&!nfree[r][c])&&!(r==gr&&c==gc))
-                    target[idx++]=r*C+c;
+                    target[idx++]=tofree[r*C+c];
             boolean[] rnfree=new boolean[R], cnfree=new boolean[C];
             Arrays.fill(rnfree,true); Arrays.fill(cnfree,true);
             for (int r=0; r<R; r++) for (int c=0; c<C; c++) if (!nfree[r][c]) rnfree[r]=cnfree[c]=false;
@@ -169,6 +169,7 @@ public class LoopoverNRGBFS {
                     int[] solvedscrm=new int[K]; solvedscrm[0]=tofree[grow*C+gclm];
                     System.arraycopy(target,0,solvedscrm,1,K-1);
                     //System.out.println(Arrays.toString(solvedscrm));
+                    System.out.println(Arrays.toString(solvedscrm));
                     int solvedscrmcode=comboCode(solvedscrm);
                     solvedcodes.add(solvedscrmcode);
                     data[solvedscrmcode]=0;
@@ -278,14 +279,14 @@ public class LoopoverNRGBFS {
             int[] targets=null;
             for (int c:fronts.get(0)) {
                 int[] t=codeCombo(c);
-                if (t[0]==grippedPc) {
+                if (freeto[t[0]]==grippedPc) {
                     targets=t;
                     break;
                 }
             }
             int[] board=new int[R*C]; Arrays.fill(board,-1);
             for (int k=0; k<K; k++)
-                board[scrm[k]]=targets[k];
+                board[freeto[scrm[k]]]=freeto[targets[k]];
             System.out.println("test scramble to solve");
             for (int r=0; r<R; r++) {
                 for (int c=0; c<C; c++) {
@@ -300,7 +301,7 @@ public class LoopoverNRGBFS {
     }
     public static void main(String[] args) {
         long st=System.currentTimeMillis();
-        String[] states={"11111x11111","01110x01110"};
+        String[] states={"11111x11111","01110x01110","01110x00010"};
         for (int i=0; i<states.length-1; i++)
             System.out.println(new LoopoverNRGBFS(5,5,2,2,states[i],states[i+1]).test());
         System.out.println("time="+(System.currentTimeMillis()-st));
