@@ -29,7 +29,7 @@ public class LoopoverNRGBFS {
         }
     }
     private int R, C;
-    private int Nfree;
+    private int F;
     private boolean[][] rcfree;
     private boolean free(int r, int c) {
         return rcfree[0][r]||rcfree[1][c];
@@ -74,14 +74,13 @@ public class LoopoverNRGBFS {
         rcfree=parse(state0);
         if (!free(gr,gc))
             throw new RuntimeException("Gripped piece is locked.");
-        tofree=new int[R*C]; freeto=new int[R*C];
-        Nfree=0;
+        tofree=new int[R*C]; freeto=new int[R*C];F=0;
         for (int r=0; r<R; r++)
             for (int c=0; c<C; c++)
                 if (free(r,c)) {
-                    tofree[r*C+c]=Nfree;
-                    freeto[Nfree]=r*C+c;
-                    Nfree++;
+                    tofree[r*C+c]=F;
+                    freeto[F]=r*C+c;
+                    F++;
                 }
                 else tofree[r*C+c]=-1;
         for (int r=0; r<R; r++) {
@@ -102,7 +101,7 @@ public class LoopoverNRGBFS {
             for (int mr=0; mr<R; mr++)
                 for (int s=-1; s<=1; s+=2) {
                     if (rcfree[0][mr]) {
-                        mvactions[idx]=new int[Nfree];
+                        mvactions[idx]=new int[F];
                         for (int r=0; r<R; r++)
                             for (int c=0; c<C; c++)
                                 if (free(r,c))
@@ -114,7 +113,7 @@ public class LoopoverNRGBFS {
             for (int mc=0; mc<C; mc++)
                 for (int s=-1; s<=1; s+=2) {
                     if (rcfree[1][mc]) {
-                        mvactions[idx]=new int[Nfree];
+                        mvactions[idx]=new int[F];
                         for (int r=0; r<R; r++)
                             for (int c=0; c<C; c++)
                                 if (free(r,c))
@@ -131,7 +130,7 @@ public class LoopoverNRGBFS {
                     K++;
         {
             long tmp=1;
-            for (int rep=0; rep<K; rep++) tmp*=Nfree-rep;
+            for (int rep=0; rep<K; rep++) tmp*=F-rep;
             if (tmp>400_000_000) throw new RuntimeException("Too many combinations to handle.");
             ncombos=(int)tmp;
             System.out.println("ncombos="+ncombos);
@@ -179,11 +178,11 @@ public class LoopoverNRGBFS {
                         }
                     }
             }
-            System.out.print((D>0?" ":"")+D+":"+fronts.get(D).length);
+            System.out.println(D+":"+fronts.get(D).length);
             fronts.add(new int[sz]);
             System.arraycopy(nfront,0,fronts.get(D+1),0,sz);
         }
-        System.out.println("\n#reached="+reached);
+        System.out.println("#reached="+reached);
         if (reached!=ncombos)
             System.out.printf("WARNING: reached=%d!=ncombos=%d%n",reached,ncombos);
         System.out.println("D="+D);
@@ -198,13 +197,13 @@ public class LoopoverNRGBFS {
     for this program, N=Nfree, K=K
     */
     private int comboCode(int[] A) {
-        int[] P=new int[Nfree];
-        for (int i=0; i<Nfree; i++) P[i]=i;
+        int[] P=new int[F];
+        for (int i=0; i< F; i++) P[i]=i;
         int[] L=P.clone();
         int out=0;
-        for (int i=Nfree-1, pow=1; i>=Nfree-K; i--) {
+        for (int i=F-1, pow=1; i>=F-K; i--) {
             //swap idxs i and L[A[i-(N-K)]] in P
-            int j=L[A[i-(Nfree-K)]];
+            int j=L[A[i-(F -K)]];
             int pi=P[i];//, pj=P[j];
             //P[i]=pj; //<--idx i will never be touched again
             P[j]=pi;
@@ -217,12 +216,12 @@ public class LoopoverNRGBFS {
         return out;
     }
     private int comboCode(int[] A, int[] f) {
-        int[] P=new int[Nfree];
-        for (int i=0; i<Nfree; i++) P[i]=i;
+        int[] P=new int[F];
+        for (int i=0; i< F; i++) P[i]=i;
         int[] L=P.clone();
         int out=0;
-        for (int i=Nfree-1, pow=1; i>=Nfree-K; i--) {
-            int j=L[f[A[i-(Nfree-K)]]];
+        for (int i=F-1, pow=1; i>=F-K; i--) {
+            int j=L[f[A[i-(F -K)]]];
             int pi=P[i];
             P[j]=pi;
             L[pi]=j;
@@ -232,15 +231,15 @@ public class LoopoverNRGBFS {
         return out;
     }
     private int[] codeCombo(int code) {
-        int[] P=new int[Nfree];
-        for (int i=0; i<Nfree; i++) P[i]=i;
-        for (int v=Nfree; v>Nfree-K; v--) {
+        int[] P=new int[F];
+        for (int i=0; i<F; i++) P[i]=i;
+        for (int v=F; v>F-K; v--) {
             int i=v-1, j=code%v;
             code/=v;
             int pi=P[i]; P[i]=P[j]; P[j]=pi;
         }
         int[] out=new int[K];
-        System.arraycopy(P,Nfree-K,out,0,K);
+        System.arraycopy(P,F-K,out,0,K);
         return out;
     }
     public String solveseq(int code) {
@@ -262,9 +261,9 @@ public class LoopoverNRGBFS {
     }
     public static void main(String[] args) {
         long st=System.currentTimeMillis();
-        String[] states={"11111x11111","11001x10011","11001x10001","11000x10000"};
+        String[] states={"11111x11111","01110x01110"};
         for (int i=0; i<states.length-1; i++)
-            System.out.println(new LoopoverNRGBFS(5,5,0,0,states[i],states[i+1]).test());
+            System.out.println(new LoopoverNRGBFS(5,5,2,2,states[i],states[i+1]).test());
         System.out.println("time="+(System.currentTimeMillis()-st));
     }
 }
