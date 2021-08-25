@@ -28,7 +28,7 @@ public class LoopoverNRGBFS {
             return new boolean[][] {mask(pcs[0]),mask(pcs[1])};
         }
     }
-    private int R, C;
+    private int R, C, grippedPc;
     private int F;
     private boolean[][] rcfree;
     private boolean free(int r, int c) {
@@ -62,6 +62,7 @@ public class LoopoverNRGBFS {
         //strict: all scrambles must be solved with gripped piece moved to where it should be in the solved board
         //nonstrict: gripped piece can be anywhere as long as all other pieces that need to be solved are solved
         this.R=R; this.C=C;
+        grippedPc=gr*C+gc;
         boolean[][] enstatemat=parse(state1);
         if (state1.indexOf('x')!=-1) {
             boolean[][] tmp=new boolean[R][C];
@@ -254,7 +255,27 @@ public class LoopoverNRGBFS {
     }
     public String test() {
         for (int code=0; code<ncombos; code++) if (data[code]!=-1) {
-            System.out.println("tscrm="+Arrays.toString(codeCombo(code)));
+            int[] scrm=codeCombo(code);
+            System.out.println("tscrm="+Arrays.toString(scrm));
+            int[] targets=null;
+            for (int c:fronts.get(0)) {
+                int[] t=codeCombo(c);
+                if (t[0]==grippedPc) {
+                    targets=t;
+                    break;
+                }
+            }
+            int[] board=new int[R*C]; Arrays.fill(board,-1);
+            for (int k=0; k<K; k++)
+                board[scrm[k]]=targets[k];
+            System.out.println("test scramble to solve");
+            for (int r=0; r<R; r++) {
+                for (int c=0; c<C; c++) {
+                    int pc=board[r*C+c];
+                    System.out.print(pc==-1?".":(char)('A'+pc));
+                }
+                System.out.println();
+            }
             return solveseq(code);
         }
         return null;
